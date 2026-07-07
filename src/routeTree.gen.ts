@@ -9,38 +9,121 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VulcanizadoRouteImport } from './routes/vulcanizado'
+import { Route as BandasRouteImport } from './routes/bandas'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TrafilaModelosRouteImport } from './routes/trafila.modelos'
+import { Route as TrafilaCategoriasRouteImport } from './routes/trafila.categorias'
+import { Route as NeumaticosModelosRouteImport } from './routes/neumaticos.modelos'
 
+const VulcanizadoRoute = VulcanizadoRouteImport.update({
+  id: '/vulcanizado',
+  path: '/vulcanizado',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BandasRoute = BandasRouteImport.update({
+  id: '/bandas',
+  path: '/bandas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TrafilaModelosRoute = TrafilaModelosRouteImport.update({
+  id: '/trafila/modelos',
+  path: '/trafila/modelos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TrafilaCategoriasRoute = TrafilaCategoriasRouteImport.update({
+  id: '/trafila/categorias',
+  path: '/trafila/categorias',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NeumaticosModelosRoute = NeumaticosModelosRouteImport.update({
+  id: '/neumaticos/modelos',
+  path: '/neumaticos/modelos',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/bandas': typeof BandasRoute
+  '/vulcanizado': typeof VulcanizadoRoute
+  '/neumaticos/modelos': typeof NeumaticosModelosRoute
+  '/trafila/categorias': typeof TrafilaCategoriasRoute
+  '/trafila/modelos': typeof TrafilaModelosRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/bandas': typeof BandasRoute
+  '/vulcanizado': typeof VulcanizadoRoute
+  '/neumaticos/modelos': typeof NeumaticosModelosRoute
+  '/trafila/categorias': typeof TrafilaCategoriasRoute
+  '/trafila/modelos': typeof TrafilaModelosRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/bandas': typeof BandasRoute
+  '/vulcanizado': typeof VulcanizadoRoute
+  '/neumaticos/modelos': typeof NeumaticosModelosRoute
+  '/trafila/categorias': typeof TrafilaCategoriasRoute
+  '/trafila/modelos': typeof TrafilaModelosRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/bandas'
+    | '/vulcanizado'
+    | '/neumaticos/modelos'
+    | '/trafila/categorias'
+    | '/trafila/modelos'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/bandas'
+    | '/vulcanizado'
+    | '/neumaticos/modelos'
+    | '/trafila/categorias'
+    | '/trafila/modelos'
+  id:
+    | '__root__'
+    | '/'
+    | '/bandas'
+    | '/vulcanizado'
+    | '/neumaticos/modelos'
+    | '/trafila/categorias'
+    | '/trafila/modelos'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BandasRoute: typeof BandasRoute
+  VulcanizadoRoute: typeof VulcanizadoRoute
+  NeumaticosModelosRoute: typeof NeumaticosModelosRoute
+  TrafilaCategoriasRoute: typeof TrafilaCategoriasRoute
+  TrafilaModelosRoute: typeof TrafilaModelosRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vulcanizado': {
+      id: '/vulcanizado'
+      path: '/vulcanizado'
+      fullPath: '/vulcanizado'
+      preLoaderRoute: typeof VulcanizadoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bandas': {
+      id: '/bandas'
+      path: '/bandas'
+      fullPath: '/bandas'
+      preLoaderRoute: typeof BandasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +131,37 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/trafila/modelos': {
+      id: '/trafila/modelos'
+      path: '/trafila/modelos'
+      fullPath: '/trafila/modelos'
+      preLoaderRoute: typeof TrafilaModelosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trafila/categorias': {
+      id: '/trafila/categorias'
+      path: '/trafila/categorias'
+      fullPath: '/trafila/categorias'
+      preLoaderRoute: typeof TrafilaCategoriasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/neumaticos/modelos': {
+      id: '/neumaticos/modelos'
+      path: '/neumaticos/modelos'
+      fullPath: '/neumaticos/modelos'
+      preLoaderRoute: typeof NeumaticosModelosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BandasRoute: BandasRoute,
+  VulcanizadoRoute: VulcanizadoRoute,
+  NeumaticosModelosRoute: NeumaticosModelosRoute,
+  TrafilaCategoriasRoute: TrafilaCategoriasRoute,
+  TrafilaModelosRoute: TrafilaModelosRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
