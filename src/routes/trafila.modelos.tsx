@@ -1,33 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { DataTable, type Column } from "@/components/admin/DataTable";
-import { trafilaModelos, type TrafilaModelo } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/trafila/modelos")({
   component: Page,
 });
 
-const columns: Column<TrafilaModelo>[] = [
-  { key: "codigo", header: "Código", mono: true, className: "w-32" },
-  { key: "categoria", header: "Categoría", mono: true, className: "w-32" },
-  { key: "compuesto", header: "Compuesto" },
-  {
-    key: "diametroMm",
-    header: "Diámetro (mm)",
-    className: "w-40 text-right",
-    render: (r) => <span className="font-mono">{r.diametroMm}</span>,
-  },
-];
-
 function Page() {
   return (
     <div>
       <PageHeader
-        eyebrow="Trafila"
-        title="Modelos"
-        description="Modelos de trafila configurados por compuesto y geometría."
+        eyebrow="Ruta anterior"
+        title="Modelos de Trafila fue reemplazado"
+        description="Los modelos ahora viven en modelos_producto y se relacionan con materiales por etapa para validar compatibilidades."
       />
-      <DataTable columns={columns} data={trafilaModelos} />
+      <div className="flex flex-wrap gap-2 px-8 py-6">
+        <a
+          href="/maestros/modelos_producto"
+          className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Ver modelos de producto
+        </a>
+        <a
+          href="/maestros/especificaciones_modelo"
+          className="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground hover:bg-accent"
+        >
+          Ver especificaciones
+        </a>
+      </div>
     </div>
   );
 }

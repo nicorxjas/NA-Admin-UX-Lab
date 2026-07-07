@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as TrafilaModelosRouteImport } from './routes/trafila.modelos'
 import { Route as TrafilaCategoriasRouteImport } from './routes/trafila.categorias'
 import { Route as NeumaticosModelosRouteImport } from './routes/neumaticos.modelos'
+import { Route as MaestrosMasterKeyRouteImport } from './routes/maestros.$masterKey'
 
 const VulcanizadoRoute = VulcanizadoRouteImport.update({
   id: '/vulcanizado',
@@ -46,11 +47,17 @@ const NeumaticosModelosRoute = NeumaticosModelosRouteImport.update({
   path: '/neumaticos/modelos',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MaestrosMasterKeyRoute = MaestrosMasterKeyRouteImport.update({
+  id: '/maestros/$masterKey',
+  path: '/maestros/$masterKey',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/bandas': typeof BandasRoute
   '/vulcanizado': typeof VulcanizadoRoute
+  '/maestros/$masterKey': typeof MaestrosMasterKeyRoute
   '/neumaticos/modelos': typeof NeumaticosModelosRoute
   '/trafila/categorias': typeof TrafilaCategoriasRoute
   '/trafila/modelos': typeof TrafilaModelosRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/bandas': typeof BandasRoute
   '/vulcanizado': typeof VulcanizadoRoute
+  '/maestros/$masterKey': typeof MaestrosMasterKeyRoute
   '/neumaticos/modelos': typeof NeumaticosModelosRoute
   '/trafila/categorias': typeof TrafilaCategoriasRoute
   '/trafila/modelos': typeof TrafilaModelosRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/bandas': typeof BandasRoute
   '/vulcanizado': typeof VulcanizadoRoute
+  '/maestros/$masterKey': typeof MaestrosMasterKeyRoute
   '/neumaticos/modelos': typeof NeumaticosModelosRoute
   '/trafila/categorias': typeof TrafilaCategoriasRoute
   '/trafila/modelos': typeof TrafilaModelosRoute
@@ -78,6 +87,7 @@ export interface FileRouteTypes {
     | '/'
     | '/bandas'
     | '/vulcanizado'
+    | '/maestros/$masterKey'
     | '/neumaticos/modelos'
     | '/trafila/categorias'
     | '/trafila/modelos'
@@ -86,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/bandas'
     | '/vulcanizado'
+    | '/maestros/$masterKey'
     | '/neumaticos/modelos'
     | '/trafila/categorias'
     | '/trafila/modelos'
@@ -94,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/bandas'
     | '/vulcanizado'
+    | '/maestros/$masterKey'
     | '/neumaticos/modelos'
     | '/trafila/categorias'
     | '/trafila/modelos'
@@ -103,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BandasRoute: typeof BandasRoute
   VulcanizadoRoute: typeof VulcanizadoRoute
+  MaestrosMasterKeyRoute: typeof MaestrosMasterKeyRoute
   NeumaticosModelosRoute: typeof NeumaticosModelosRoute
   TrafilaCategoriasRoute: typeof TrafilaCategoriasRoute
   TrafilaModelosRoute: typeof TrafilaModelosRoute
@@ -152,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NeumaticosModelosRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/maestros/$masterKey': {
+      id: '/maestros/$masterKey'
+      path: '/maestros/$masterKey'
+      fullPath: '/maestros/$masterKey'
+      preLoaderRoute: typeof MaestrosMasterKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -159,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BandasRoute: BandasRoute,
   VulcanizadoRoute: VulcanizadoRoute,
+  MaestrosMasterKeyRoute: MaestrosMasterKeyRoute,
   NeumaticosModelosRoute: NeumaticosModelosRoute,
   TrafilaCategoriasRoute: TrafilaCategoriasRoute,
   TrafilaModelosRoute: TrafilaModelosRoute,
@@ -166,3 +187,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

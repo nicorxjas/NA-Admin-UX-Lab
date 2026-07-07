@@ -1,38 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { DataTable, type Column } from "@/components/admin/DataTable";
-import { bandas, type Banda } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/bandas")({
   component: Page,
 });
 
-const columns: Column<Banda>[] = [
-  { key: "codigo", header: "Código", mono: true, className: "w-32" },
-  { key: "nombre", header: "Nombre" },
-  {
-    key: "ancho",
-    header: "Ancho (mm)",
-    className: "w-32 text-right",
-    render: (r) => <span className="font-mono">{r.ancho}</span>,
-  },
-  {
-    key: "largo",
-    header: "Largo (mm)",
-    className: "w-32 text-right",
-    render: (r) => <span className="font-mono">{r.largo}</span>,
-  },
-];
-
 function Page() {
   return (
     <div>
       <PageHeader
-        eyebrow="Estación"
-        title="Bandas"
-        description="Datos maestros de bandas de rodamiento."
+        eyebrow="Ruta anterior"
+        title="Bandas fue reemplazado"
+        description="La administración ahora usa el modelo real Fase 1. La Banda se gestiona como salida de Trafila Grande y como modelo/material dentro de los maestros operativos."
       />
-      <DataTable columns={columns} data={bandas} />
+      <div className="flex flex-wrap gap-2 px-8 py-6">
+        <a
+          href="/maestros/modelos_producto?area=trafila"
+          className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Ir a Trafila
+        </a>
+        <a
+          href="/maestros/modelos_producto"
+          className="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground hover:bg-accent"
+        >
+          Ver modelos de producto
+        </a>
+      </div>
     </div>
   );
 }

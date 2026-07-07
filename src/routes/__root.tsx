@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import { MasterDataProvider } from "@/lib/master-store";
 
 function NotFoundComponent() {
   return (
@@ -19,9 +20,7 @@ function NotFoundComponent() {
       <div className="max-w-md text-center">
         <h1 className="text-7xl font-bold text-foreground">404</h1>
         <h2 className="mt-4 text-xl font-semibold text-foreground">Página no encontrada</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          La ruta que buscas no existe.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">La ruta que buscas no existe.</p>
         <div className="mt-6">
           <Link
             to="/"
@@ -79,9 +78,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Trazabilidad · Panel Administrador" },
-      { name: "description", content: "Panel administrador para trazabilidad de fabricación de neumáticos: búsqueda de dependencias y carga de datos maestros por estación." },
+      {
+        name: "description",
+        content:
+          "Panel administrador para trazabilidad de fabricación de neumáticos: búsqueda de dependencias y carga de datos maestros por estación.",
+      },
       { property: "og:title", content: "Trazabilidad · Panel Administrador" },
-      { property: "og:description", content: "Panel administrador para trazabilidad de fabricación de neumáticos." },
+      {
+        property: "og:description",
+        content: "Panel administrador para trazabilidad de fabricación de neumáticos.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -121,12 +127,14 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="flex min-h-screen w-full bg-background text-foreground">
-        <AdminSidebar />
-        <main className="flex-1 min-w-0">
-          <Outlet />
-        </main>
-      </div>
+      <MasterDataProvider>
+        <div className="flex min-h-screen w-full bg-background text-foreground">
+          <AdminSidebar />
+          <main className="flex-1 min-w-0">
+            <Outlet />
+          </main>
+        </div>
+      </MasterDataProvider>
     </QueryClientProvider>
   );
 }

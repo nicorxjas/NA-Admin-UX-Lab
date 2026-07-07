@@ -1,38 +1,38 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { DataTable, type Column } from "@/components/admin/DataTable";
-import { vulcanizados, type Vulcanizado } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/vulcanizado")({
   component: Page,
 });
 
-const columns: Column<Vulcanizado>[] = [
-  { key: "codigo", header: "Código", mono: true, className: "w-32" },
-  { key: "molde", header: "Molde", mono: true, className: "w-32" },
-  {
-    key: "temperatura",
-    header: "Temperatura (°C)",
-    className: "w-40 text-right",
-    render: (r) => <span className="font-mono">{r.temperatura}</span>,
-  },
-  {
-    key: "tiempoMin",
-    header: "Tiempo (min)",
-    className: "w-32 text-right",
-    render: (r) => <span className="font-mono">{r.tiempoMin}</span>,
-  },
-];
-
 function Page() {
   return (
     <div>
       <PageHeader
-        eyebrow="Estación"
-        title="Vulcanizado"
-        description="Recetas y parámetros de vulcanizado."
+        eyebrow="Ruta anterior"
+        title="Vulcanizado ahora es estación Fase 1"
+        description="La pantalla real registra máquina de vulcanizado, cavidad, molde, modelo/neumático, operario, turno e ID Quemado. Temperatura, presión, tiempo y PLC quedan diferidos."
       />
-      <DataTable columns={columns} data={vulcanizados} />
+      <div className="flex flex-wrap gap-2 px-8 py-6">
+        <a
+          href="/maestros/maquinas?area=vulcanizado"
+          className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Ir a Vulcanizado
+        </a>
+        <a
+          href="/maestros/cavidades"
+          className="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground hover:bg-accent"
+        >
+          Ver cavidades
+        </a>
+        <a
+          href="/maestros/moldes"
+          className="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground hover:bg-accent"
+        >
+          Ver moldes
+        </a>
+      </div>
     </div>
   );
 }

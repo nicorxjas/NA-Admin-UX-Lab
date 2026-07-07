@@ -1,28 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/admin/PageHeader";
-import { DataTable, type Column } from "@/components/admin/DataTable";
-import { neumaticoModelos, type Neumatico } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/neumaticos/modelos")({
   component: Page,
 });
 
-const columns: Column<Neumatico>[] = [
-  { key: "codigo", header: "Código", mono: true, className: "w-32" },
-  { key: "modelo", header: "Modelo" },
-  { key: "medida", header: "Medida", mono: true, className: "w-40" },
-  { key: "construccion", header: "Construcción", className: "w-40" },
-];
-
 function Page() {
   return (
     <div>
       <PageHeader
-        eyebrow="Neumáticos"
-        title="Modelos"
-        description="Catálogo de modelos de neumático producidos en la planta."
+        eyebrow="Ruta anterior"
+        title="Modelos de Neumáticos fue reemplazado"
+        description="Los modelos de neumático ahora forman parte de modelos_producto junto con Banda, Tela Cortada y Cartucho."
       />
-      <DataTable columns={columns} data={neumaticoModelos} />
+      <div className="flex flex-wrap gap-2 px-8 py-6">
+        <a
+          href="/maestros/modelos_producto"
+          className="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Ver modelos de producto
+        </a>
+        <a
+          href="/"
+          className="inline-flex h-9 items-center rounded-md border border-input bg-background px-4 text-sm font-medium text-foreground hover:bg-accent"
+        >
+          Buscar trazabilidad
+        </a>
+      </div>
     </div>
   );
 }
