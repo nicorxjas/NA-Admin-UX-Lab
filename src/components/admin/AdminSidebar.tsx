@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ComponentType } from "react";
 import {
   ChevronDown,
@@ -23,6 +23,9 @@ type Group = {
   icon: ComponentType<{ className?: string }>;
   children: Leaf[];
 };
+
+const OPEN_STATE_STORAGE_KEY = "na-carrera-admin-sidebar-open";
+const DEFAULT_OPEN_GROUPS = new Set(["trafila", "corte-tela"]);
 
 function masterHref(masterKey: MasterKey, area: string) {
   return `/maestros/${masterKey}?area=${area}`;
@@ -109,22 +112,112 @@ const nav: Group[] = [
   },
 ];
 
+function createOpenState(currentHref: string, currentPath: string) {
+  const initial: Record<string, boolean> = {};
+  let hasActiveGroup = false;
+
+  for (const group of nav) {
+    const groupActive = group.children.some(
+      (child) => currentHref === child.href || currentPath === child.href,
+    );
+    initial[group.key] = groupActive;
+    hasActiveGroup ||= groupActive;
+  }
+
+  if (!hasActiveGroup) {
+    for (const key of DEFAULT_OPEN_GROUPS) {
+      initial[key] = true;
+    }
+  }
+
+  return initial;
+}
+
+function getActiveOpenState(currentHref: string, currentPath: string) {
+  const activeOpen: Record<string, boolean> = {};
+
+  for (const group of nav) {
+    if (group.children.some((child) => currentHref === child.href || currentPath === child.href)) {
+      activeOpen[group.key] = true;
+    }
+  }
+
+  return activeOpen;
+}
+
+function readStoredOpenState() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(OPEN_STATE_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    const stored: Record<string, boolean> = {};
+    for (const group of nav) {
+      const value = (parsed as Record<string, unknown>)[group.key];
+      if (typeof value === "boolean") {
+        stored[group.key] = value;
+      }
+    }
+
+    return stored;
+  } catch {
+    return null;
+  }
+}
+
 export function AdminSidebar() {
   const currentHref = useRouterState({ select: (state) => state.location.href });
   const currentPath = useRouterState({ select: (state) => state.location.pathname });
   const isActive = (href: string) => currentHref === href || currentPath === href;
+  const initialRoute = useRef({ currentHref, currentPath });
+  const hasLoadedStoredOpenState = useRef(false);
 
-  const [open, setOpen] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {};
-    for (const group of nav) {
-      initial[group.key] = group.children.some((child) => isActive(child.href));
+  const [open, setOpen] = useState<Record<string, boolean>>(() =>
+    createOpenState(currentHref, currentPath),
+  );
+
+  useEffect(() => {
+    const { currentHref: initialHref, currentPath: initialPath } = initialRoute.current;
+    const storedOpenState = readStoredOpenState();
+    const activeOpenState = getActiveOpenState(initialHref, initialPath);
+
+    setOpen((state) => ({
+      ...state,
+      ...storedOpenState,
+      ...activeOpenState,
+    }));
+    hasLoadedStoredOpenState.current = true;
+  }, []);
+
+  useEffect(() => {
+    const activeOpenState = getActiveOpenState(currentHref, currentPath);
+    if (!Object.values(activeOpenState).some(Boolean)) {
+      return;
     }
-    if (!Object.values(initial).some(Boolean)) {
-      initial.trafila = true;
-      initial["corte-tela"] = true;
+
+    setOpen((state) => ({
+      ...state,
+      ...activeOpenState,
+    }));
+  }, [currentHref, currentPath]);
+
+  useEffect(() => {
+    if (!hasLoadedStoredOpenState.current || typeof window === "undefined") {
+      return;
     }
-    return initial;
-  });
+
+    window.localStorage.setItem(OPEN_STATE_STORAGE_KEY, JSON.stringify(open));
+  }, [open]);
 
   return (
     <aside className="sticky top-0 flex h-screen w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
@@ -157,7 +250,7 @@ export function AdminSidebar() {
         Datos maestros
       </div>
 
-      <nav className="linear-scrollbar flex-1 space-y-0.5 overflow-y-auto px-2 pb-6">
+      <nav className="linear-scrollbar min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-6">
         {nav.map((group) => {
           const Icon = group.icon;
           const isOpen = open[group.key];
@@ -202,8 +295,8 @@ export function AdminSidebar() {
                           aria-hidden
                           className="pointer-events-none absolute left-0 top-1/2 h-px w-2.5 -translate-y-1/2 bg-tree-guide"
                         />
-                        <a
-                          href={child.href}
+                        <Link
+                          to={child.href}
                           className={cn(
                             "ml-3 flex items-center rounded-md px-2.5 py-1.5 text-[12.5px] transition-colors",
                             active
@@ -212,7 +305,7 @@ export function AdminSidebar() {
                           )}
                         >
                           <span className="truncate">{child.label}</span>
-                        </a>
+                        </Link>
                       </div>
                     );
                   })}
