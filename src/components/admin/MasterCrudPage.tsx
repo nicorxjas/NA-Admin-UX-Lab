@@ -1,7 +1,19 @@
-import { useMemo, useState } from "react";
-import { Edit3, Plus, RotateCcw, Search, Trash2 } from "lucide-react";
+import { useMemo, useState, type WheelEvent } from "react";
+import {
+  CalendarIcon,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Edit3,
+  Plus,
+  RotateCcw,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -35,6 +48,8 @@ import {
 } from "@/lib/mock-data";
 
 const SELECT_NONE = "__none__";
+const HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
+const MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
 
 type FormState = Record<string, string | boolean>;
 
@@ -401,9 +416,9 @@ function FieldInput({
   if (field.type === "boolean") {
     const checked = value === true;
     return (
-      <div className="flex h-9 items-center gap-3 rounded-md border border-border/70 bg-background/40 px-3">
+      <div className="linear-form-switch-field">
         <Switch id={id} checked={checked} onCheckedChange={onChange} />
-        <span className="text-[12.5px] text-muted-foreground">{checked ? "Activo" : "No"}</span>
+        <span className="linear-form-switch-label">{checked ? "Activo" : "No"}</span>
       </div>
     );
   }
@@ -415,7 +430,7 @@ function FieldInput({
         value={String(value ?? "")}
         onChange={(event) => onChange(event.target.value)}
         placeholder={field.placeholder}
-        className="min-h-24 bg-card text-[13px]"
+        className="linear-form-textarea"
       />
     );
   }
@@ -425,7 +440,7 @@ function FieldInput({
     const current = String(value ?? "") || (field.required ? "" : SELECT_NONE);
     return (
       <Select value={current} onValueChange={(next) => onChange(next)}>
-        <SelectTrigger id={id} className="h-9 bg-card text-[13px]">
+        <SelectTrigger id={id} className="linear-form-select-trigger">
           <SelectValue placeholder="Seleccionar" />
         </SelectTrigger>
         <SelectContent>
@@ -440,17 +455,264 @@ function FieldInput({
     );
   }
 
+  if (field.type === "number") {
+    return (
+      <NumberInput
+        id={id}
+        value={String(value ?? "")}
+        placeholder={field.placeholder}
+        onChange={(next) => onChange(next)}
+      />
+    );
+  }
+
+  if (field.type === "time") {
+    return (
+      <TimeInput
+        id={id}
+        value={String(value ?? "")}
+        placeholder={field.placeholder}
+        onChange={(next) => onChange(next)}
+      />
+    );
+  }
+
+  if (field.type === "date") {
+    return (
+      <DateInput
+        id={id}
+        value={String(value ?? "")}
+        placeholder={field.placeholder}
+        onChange={(next) => onChange(next)}
+      />
+    );
+  }
+
   return (
     <Input
       id={id}
-      type={field.type === "number" ? "number" : field.type}
-      step={field.type === "number" ? "any" : undefined}
+      type={field.type}
       value={String(value ?? "")}
       onChange={(event) => onChange(event.target.value)}
       placeholder={field.placeholder}
-      className="h-9 bg-card text-[13px]"
+      className="linear-form-input"
     />
   );
+}
+
+function NumberInput({
+  id,
+  value,
+  placeholder,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  const step = (direction: 1 | -1) => {
+    const current = Number.parseFloat(value);
+    onChange(String((Number.isFinite(current) ? current : 0) + direction));
+  };
+
+  return (
+    <div className="linear-number-field">
+      <input
+        id={id}
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="linear-number-input"
+      />
+      <div className="linear-number-stepper">
+        <button
+          type="button"
+          className="linear-number-step"
+          onClick={() => step(1)}
+          aria-label="Incrementar valor"
+        >
+          <ChevronUp className="linear-number-step-icon" />
+        </button>
+        <button
+          type="button"
+          className="linear-number-step linear-number-step-secondary"
+          onClick={() => step(-1)}
+          aria-label="Disminuir valor"
+        >
+          <ChevronDown className="linear-number-step-icon" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function TimeInput({
+  id,
+  value,
+  placeholder,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  const [hour = "", minute = ""] = value.split(":");
+
+  const setPart = (part: "hour" | "minute", next: string) => {
+    const nextHour = part === "hour" ? next : hour || "00";
+    const nextMinute = part === "minute" ? next : minute || "00";
+    onChange(`${nextHour}:${nextMinute}`);
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button id={id} type="button" className="linear-field-trigger">
+          <span
+            className={cn(
+              "linear-field-mono",
+              value ? "linear-field-value" : "linear-field-value-muted",
+            )}
+          >
+            {value || placeholder || "--:--"}
+          </span>
+          <Clock className="linear-field-icon" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="linear-time-popover">
+        <div className="linear-picker-header">
+          <span className="linear-picker-title">Hora</span>
+          {value && (
+            <button
+              type="button"
+              className="linear-picker-clear"
+              onClick={() => onChange("")}
+              aria-label="Limpiar hora"
+            >
+              <X className="linear-picker-clear-icon" />
+            </button>
+          )}
+        </div>
+        <div className="linear-time-grid">
+          <TimeColumn
+            label="HH"
+            options={HOURS}
+            value={hour}
+            onSelect={(next) => setPart("hour", next)}
+          />
+          <TimeColumn
+            label="MM"
+            options={MINUTES}
+            value={minute}
+            onSelect={(next) => setPart("minute", next)}
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TimeColumn({
+  label,
+  options,
+  value,
+  onSelect,
+}: {
+  label: string;
+  options: string[];
+  value: string;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <div>
+      <div className="linear-time-column-label">{label}</div>
+      <div className="linear-time-column-scroll" onWheel={scrollTimeColumn}>
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            className={cn("linear-time-option", value === option && "linear-time-option-active")}
+            onClick={() => onSelect(option)}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function scrollTimeColumn(event: WheelEvent<HTMLDivElement>) {
+  event.currentTarget.scrollTop += event.deltaY;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function DateInput({
+  id,
+  value,
+  placeholder,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  const selected = parseDateValue(value);
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button id={id} type="button" className="linear-field-trigger">
+          <span className={value ? "linear-field-value" : "linear-field-value-muted"}>
+            {value || placeholder || "Seleccionar fecha"}
+          </span>
+          <CalendarIcon className="linear-field-icon" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="linear-date-popover">
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(date) => onChange(date ? formatDateValue(date) : "")}
+          className="linear-calendar-surface"
+        />
+        {value && (
+          <div className="linear-date-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="linear-date-clear-button"
+              onClick={() => onChange("")}
+            >
+              <X className="linear-picker-clear-icon" />
+              Limpiar fecha
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function parseDateValue(value: string) {
+  if (!value) return undefined;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+}
+
+function formatDateValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function resolveOptions(field: MasterField, masters: Record<MasterKey, MasterRecord[]>) {
