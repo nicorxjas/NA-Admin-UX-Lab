@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type WheelEvent } from "react";
 import {
-  CalendarIcon,
   Camera,
   Check,
   ChevronDown,
@@ -17,7 +16,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+import { DateInput } from "@/components/ui/date-input";
 import {
   Dialog,
   DialogContent,
@@ -720,11 +719,12 @@ function FieldInput({
 
   if (field.type === "select") {
     const options = resolveOptions(field, masters);
-    const current = String(value ?? "") || (field.required ? "" : SELECT_NONE);
+    const current = String(value ?? "");
+    const placeholder = field.placeholder ?? `Seleccionar ${field.label.toLowerCase()}`;
     return (
-      <Select value={current} onValueChange={(next) => onChange(next)}>
+      <Select value={current} onValueChange={(next) => onChange(next === SELECT_NONE ? "" : next)}>
         <SelectTrigger id={id} className="linear-form-select-trigger">
-          <SelectValue placeholder="Seleccionar" />
+          <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
           {!field.required && <SelectItem value={SELECT_NONE}>Sin asignar</SelectItem>}
@@ -933,69 +933,6 @@ function scrollTimeColumn(event: WheelEvent<HTMLDivElement>) {
   event.currentTarget.scrollTop += event.deltaY;
   event.preventDefault();
   event.stopPropagation();
-}
-
-function DateInput({
-  id,
-  value,
-  placeholder,
-  onChange,
-}: {
-  id: string;
-  value: string;
-  placeholder?: string;
-  onChange: (value: string) => void;
-}) {
-  const selected = parseDateValue(value);
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button id={id} type="button" className="linear-field-trigger">
-          <span className={value ? "linear-field-value" : "linear-field-value-muted"}>
-            {value || placeholder || "Seleccionar fecha"}
-          </span>
-          <CalendarIcon className="linear-field-icon" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="linear-date-popover">
-        <Calendar
-          mode="single"
-          selected={selected}
-          onSelect={(date) => onChange(date ? formatDateValue(date) : "")}
-          className="linear-calendar-surface"
-        />
-        {value && (
-          <div className="linear-date-actions">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="linear-date-clear-button"
-              onClick={() => onChange("")}
-            >
-              <X className="linear-picker-clear-icon" />
-              Limpiar fecha
-            </Button>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function parseDateValue(value: string) {
-  if (!value) return undefined;
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return undefined;
-  return new Date(year, month - 1, day);
-}
-
-function formatDateValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 function resolveOptions(field: MasterField, masters: Record<MasterKey, MasterRecord[]>) {

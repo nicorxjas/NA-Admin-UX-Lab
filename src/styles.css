@@ -266,8 +266,20 @@
     @apply h-8 w-full justify-start text-muted-foreground hover:text-foreground;
   }
 
+  .reception-field,
+  .reception-select-trigger,
+  .reception-date-trigger {
+    background-color: oklch(0.155 0.008 265) !important;
+  }
+
+  .reception-field:hover,
+  .reception-select-trigger:hover,
+  .reception-date-trigger:hover {
+    background-color: oklch(0.155 0.008 265) !important;
+  }
+
   .reception-field {
-    @apply border-border/80 bg-background/45;
+    @apply border-border/80;
   }
 
   .reception-field:focus-visible {
@@ -277,8 +289,20 @@
       0 1px 2px 0 rgb(0 0 0 / 0.14) !important;
   }
 
+  .reception-date-trigger {
+    @apply flex w-full items-center rounded-md border border-border/80 px-3 py-1 text-left shadow-sm transition-colors focus-visible:outline-none;
+  }
+
+  .reception-date-trigger:focus-visible,
+  .reception-date-trigger[data-state="open"] {
+    border-color: rgb(94 106 210 / 0.85) !important;
+    box-shadow:
+      0 0 0 1px rgb(94 106 210 / 0.72),
+      0 1px 2px 0 rgb(0 0 0 / 0.14) !important;
+  }
+
   .reception-select-trigger {
-    @apply border-border/80 bg-background/45;
+    @apply border-border/80;
   }
 
   .reception-select-trigger:focus,
@@ -287,6 +311,36 @@
     box-shadow:
       0 0 0 1px rgb(94 106 210 / 0.72),
       0 1px 2px 0 rgb(0 0 0 / 0.14) !important;
+  }
+
+  .reception-calendar-surface {
+    --primary: #5e6ad2;
+    --primary-foreground: white;
+    --ring: transparent;
+    --color-primary: #5e6ad2;
+    --color-primary-foreground: white;
+    --color-ring: transparent;
+  }
+
+  .reception-calendar-surface [data-selected-single="true"],
+  .reception-calendar-surface [data-range-start="true"],
+  .reception-calendar-surface [data-range-end="true"] {
+    background-color: #5e6ad2 !important;
+    border-color: transparent !important;
+    color: white !important;
+  }
+
+  .reception-calendar-surface button:focus,
+  .reception-calendar-surface button:focus-visible,
+  .reception-calendar-surface [data-focused="true"] button {
+    border-color: transparent !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
+
+  .reception-calendar-surface [data-range-middle="true"] {
+    background-color: rgb(94 106 210 / 0.16) !important;
+    color: var(--color-foreground) !important;
   }
 }
 
