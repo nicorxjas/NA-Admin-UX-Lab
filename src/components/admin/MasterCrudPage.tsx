@@ -1,13 +1,17 @@
-import { useMemo, useState, type WheelEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type WheelEvent } from "react";
 import {
   CalendarIcon,
+  Camera,
+  Check,
   ChevronDown,
   ChevronUp,
   Clock,
   Edit3,
   Plus,
+  QrCode,
   RotateCcw,
   Search,
+  Smartphone,
   Trash2,
   X,
 } from "lucide-react";
@@ -52,6 +56,18 @@ const HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2,
 const MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
 
 type FormState = Record<string, string | boolean>;
+type ScannerStatus = "idle" | "requesting" | "scanning" | "detected" | "unsupported" | "blocked";
+type BarcodeDetectorResult = { rawValue: string };
+type BarcodeDetectorInstance = {
+  detect: (source: CanvasImageSource) => Promise<BarcodeDetectorResult[]>;
+};
+type BarcodeDetectorConstructor = new (options?: { formats?: string[] }) => BarcodeDetectorInstance;
+
+declare global {
+  interface Window {
+    BarcodeDetector?: BarcodeDetectorConstructor;
+  }
+}
 
 function fieldByKey(config: MasterConfig, key: string) {
   return config.fields.find((field) => field.key === key);
@@ -135,9 +151,16 @@ function validateForm({
 export function MasterCrudPage({ masterKey }: { masterKey: MasterKey }) {
   const config = masterConfigs[masterKey];
   const { masters, createRecord, updateRecord, setRecordActive } = useMasterData();
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanFrameRef = useRef<number | null>(null);
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<MasterRecord | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [scannerStatus, setScannerStatus] = useState<ScannerStatus>("idle");
+  const [scannedCode, setScannedCode] = useState("");
+  const [manualCode, setManualCode] = useState("");
   const [form, setForm] = useState<FormState>(() => createEmptyForm(config));
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -159,12 +182,91 @@ export function MasterCrudPage({ masterKey }: { masterKey: MasterKey }) {
   }, [config, masters, query, records]);
 
   const activeCount = records.filter((record) => record.activo).length;
+  const qrValue = (scannedCode || manualCode).trim();
+
+  useEffect(() => {
+    if (!qrDialogOpen || masterKey !== "dispositivos") return;
+
+    let active = true;
+
+    const stopScanner = () => {
+      if (scanFrameRef.current !== null) {
+        window.cancelAnimationFrame(scanFrameRef.current);
+        scanFrameRef.current = null;
+      }
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+
+    const startScanner = async () => {
+      if (!navigator.mediaDevices?.getUserMedia || !window.BarcodeDetector) {
+        setScannerStatus("unsupported");
+        return;
+      }
+
+      setScannerStatus("requesting");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+        if (!active) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (!video) return;
+
+        video.srcObject = stream;
+        await video.play();
+
+        const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+        setScannerStatus("scanning");
+
+        const scan = async () => {
+          if (!active || !videoRef.current) return;
+          try {
+            const [result] = await detector.detect(videoRef.current);
+            if (result?.rawValue) {
+              setScannedCode(result.rawValue);
+              setScannerStatus("detected");
+              stopScanner();
+              return;
+            }
+          } catch {
+            // Keep the camera running; a single decode miss should not interrupt scanning.
+          }
+          scanFrameRef.current = window.requestAnimationFrame(scan);
+        };
+
+        scanFrameRef.current = window.requestAnimationFrame(scan);
+      } catch {
+        if (active) setScannerStatus("blocked");
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      active = false;
+      stopScanner();
+    };
+  }, [masterKey, qrDialogOpen]);
 
   const openCreate = () => {
     setEditing(null);
     setForm(createEmptyForm(config));
     setErrors({});
     setDialogOpen(true);
+  };
+
+  const openQrRegistration = () => {
+    setScannerStatus("idle");
+    setScannedCode("");
+    setManualCode("");
+    setQrDialogOpen(true);
   };
 
   const openEdit = (record: MasterRecord) => {
@@ -197,22 +299,51 @@ export function MasterCrudPage({ masterKey }: { masterKey: MasterKey }) {
     setDialogOpen(false);
   };
 
+  const openCreateFromQr = () => {
+    if (!qrValue) return;
+
+    setEditing(null);
+    setForm({
+      ...createEmptyForm(config),
+      codigo: equipmentCodeFromQr(qrValue),
+      fingerprint: qrValue,
+    });
+    setErrors({});
+    setQrDialogOpen(false);
+    setDialogOpen(true);
+  };
+
+  const headerActions = (
+    <>
+      {masterKey === "dispositivos" && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={openQrRegistration}
+          className="h-8 gap-1.5 border-[#5E6AD2]/50 bg-[#5E6AD2]/10 text-[#A8B1FF] hover:bg-[#5E6AD2]/15 hover:text-[#C7CDFF]"
+        >
+          <QrCode className="h-3.5 w-3.5" />
+          Escanear QR
+        </Button>
+      )}
+      <Button
+        size="sm"
+        onClick={openCreate}
+        className="h-8 gap-1.5 bg-foreground text-background hover:bg-foreground/90"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Nuevo
+      </Button>
+    </>
+  );
+
   return (
     <div className="flex min-h-screen flex-col">
       <PageHeader
         eyebrow={config.eyebrow}
         title={config.title}
         description={config.description}
-        actions={
-          <Button
-            size="sm"
-            onClick={openCreate}
-            className="h-8 gap-1.5 bg-foreground text-background hover:bg-foreground/90"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Nuevo
-          </Button>
-        }
+        actions={headerActions}
       />
 
       <div className="px-8 py-6">
@@ -394,8 +525,160 @@ export function MasterCrudPage({ masterKey }: { masterKey: MasterKey }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+        <DialogContent className="max-w-2xl border-border/80 bg-[#0e0f11] p-0 shadow-2xl">
+          <div className="px-6 pt-6 pb-5">
+            <DialogHeader className="space-y-2">
+              <DialogTitle className="flex items-center gap-2 text-[22px] font-semibold text-foreground">
+                <QrCode className="h-5 w-5 text-[#A8B1FF]" />
+                Escanear QR del equipo
+              </DialogTitle>
+              <DialogDescription className="max-w-xl text-[13.5px] leading-relaxed text-muted-foreground">
+                Apunta la camara al codigo pegado en el equipo fisico para iniciar su alta en
+                Dispositivos.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-6 rounded-lg border border-border/80 bg-background/40 p-5">
+              <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
+                <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-md border border-border/80 bg-[#050607]">
+                  <video
+                    ref={videoRef}
+                    muted
+                    playsInline
+                    className={cn(
+                      "h-full w-full object-cover",
+                      scannerStatus === "scanning" || scannerStatus === "detected"
+                        ? "opacity-80"
+                        : "opacity-0",
+                    )}
+                  />
+                  <div className="pointer-events-none absolute inset-5 rounded-md border border-white/15">
+                    <span className="absolute left-0 top-0 h-8 w-8 border-l-2 border-t-2 border-[#5E6AD2]" />
+                    <span className="absolute right-0 top-0 h-8 w-8 border-r-2 border-t-2 border-[#5E6AD2]" />
+                    <span className="absolute bottom-0 left-0 h-8 w-8 border-b-2 border-l-2 border-[#5E6AD2]" />
+                    <span className="absolute bottom-0 right-0 h-8 w-8 border-b-2 border-r-2 border-[#5E6AD2]" />
+                    {scannerStatus === "scanning" && (
+                      <span className="absolute left-3 right-3 top-1/2 h-px bg-[#A8B1FF] shadow-[0_0_18px_rgba(94,106,210,0.85)]" />
+                    )}
+                  </div>
+                  {scannerStatus !== "scanning" && scannerStatus !== "detected" && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+                      <Camera className="h-9 w-9 text-[#A8B1FF]" />
+                      <div className="mt-3 text-[13px] font-medium text-foreground">
+                        {scannerStatus === "requesting"
+                          ? "Solicitando camara"
+                          : scannerStatus === "blocked"
+                            ? "Camara no disponible"
+                            : scannerStatus === "unsupported"
+                              ? "Escaner no soportado"
+                              : "Preparando escaner"}
+                      </div>
+                      <div className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                        Usa el ingreso manual si el navegador no puede leer QR.
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex min-w-0 flex-col justify-center">
+                  <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
+                    <Smartphone className="h-4 w-4 text-[#A8B1FF]" />
+                    Leer etiqueta del equipo
+                  </div>
+                  <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+                    Cuando el QR sea detectado, se abre el alta con el codigo y fingerprint
+                    precargados.
+                  </p>
+
+                  <div className="mt-5">
+                    <div className="mb-2 text-[12px] font-medium text-foreground">
+                      Codigo detectado o ingreso manual:
+                    </div>
+                    <Input
+                      value={scannedCode || manualCode}
+                      onChange={(event) => {
+                        setScannedCode("");
+                        setManualCode(event.target.value);
+                      }}
+                      placeholder="Ej: EQ-PRENSA-04 o https://.../equipo/EQ-PRENSA-04"
+                      className="h-10 border-border/80 bg-[#111214] font-mono text-[13px]"
+                    />
+                    {scannedCode && (
+                      <div className="mt-2 flex items-center gap-1.5 text-[12px] text-[#A8B1FF]">
+                        <Check className="h-3.5 w-3.5" />
+                        QR leido correctamente
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              {[
+                ["1", "Abrir escaner", "Tocar el boton en este panel."],
+                ["2", "Ir al equipo", "Apuntar al QR de la etiqueta."],
+                ["3", "Completar alta", "Confirmar tipo, estacion y nombre."],
+              ].map(([number, title, description]) => (
+                <div
+                  key={number}
+                  className="rounded-md border border-border/70 bg-card/60 p-3 text-[12.5px]"
+                >
+                  <div className="mb-2 flex h-6 w-6 items-center justify-center rounded-md bg-[#5E6AD2] text-[12px] font-semibold text-white">
+                    {number}
+                  </div>
+                  <div className="font-medium text-foreground">{title}</div>
+                  <div className="mt-1 leading-relaxed text-muted-foreground">{description}</div>
+                </div>
+              ))}
+            </div>
+
+            <DialogFooter className="mt-6 items-center gap-3 sm:justify-between">
+              <div className="text-[12px] text-muted-foreground">
+                El alta queda pendiente hasta guardar el formulario de Dispositivos.
+              </div>
+              <Button
+                type="button"
+                onClick={openCreateFromQr}
+                disabled={!qrValue}
+                className="bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
+              >
+                Registrar equipo
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
+function equipmentCodeFromQr(rawValue: string) {
+  const raw = rawValue.trim();
+  try {
+    const url = new URL(raw);
+    const fromQuery =
+      url.searchParams.get("codigo") ??
+      url.searchParams.get("equipo") ??
+      url.searchParams.get("device") ??
+      url.searchParams.get("code") ??
+      url.searchParams.get("id");
+    const fromPath = url.pathname.split("/").filter(Boolean).at(-1);
+    return normalizeEquipmentCode(fromQuery ?? fromPath ?? raw);
+  } catch {
+    return normalizeEquipmentCode(raw);
+  }
+}
+
+function normalizeEquipmentCode(value: string) {
+  return value
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9_.-]/g, "-")
+    .toUpperCase()
+    .slice(0, 48);
 }
 
 function FieldInput({

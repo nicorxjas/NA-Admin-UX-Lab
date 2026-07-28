@@ -4,6 +4,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -124,13 +125,21 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const currentPath = useRouterState({ select: (state) => state.location.pathname });
+  const isReceptionRoute = currentPath === "/recepcion" || currentPath.startsWith("/recepcion/");
 
   return (
     <QueryClientProvider client={queryClient}>
       <MasterDataProvider>
-        <div className="flex min-h-screen w-full bg-background text-foreground">
-          <AdminSidebar />
-          <main className="flex-1 min-w-0">
+        <div
+          className={
+            isReceptionRoute
+              ? "min-h-screen w-full bg-background text-foreground"
+              : "flex min-h-screen w-full bg-background text-foreground"
+          }
+        >
+          {!isReceptionRoute && <AdminSidebar />}
+          <main className={isReceptionRoute ? "min-h-screen w-full" : "flex-1 min-w-0"}>
             <Outlet />
           </main>
         </div>

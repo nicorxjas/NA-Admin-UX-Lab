@@ -265,6 +265,29 @@
   .linear-date-clear-button {
     @apply h-8 w-full justify-start text-muted-foreground hover:text-foreground;
   }
+
+  .reception-field {
+    @apply border-border/80 bg-background/45;
+  }
+
+  .reception-field:focus-visible {
+    border-color: rgb(94 106 210 / 0.85) !important;
+    box-shadow:
+      0 0 0 1px rgb(94 106 210 / 0.72),
+      0 1px 2px 0 rgb(0 0 0 / 0.14) !important;
+  }
+
+  .reception-select-trigger {
+    @apply border-border/80 bg-background/45;
+  }
+
+  .reception-select-trigger:focus,
+  .reception-select-trigger[data-state="open"] {
+    border-color: rgb(94 106 210 / 0.85) !important;
+    box-shadow:
+      0 0 0 1px rgb(94 106 210 / 0.72),
+      0 1px 2px 0 rgb(0 0 0 / 0.14) !important;
+  }
 }
 
 @layer utilities {
