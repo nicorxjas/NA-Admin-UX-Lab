@@ -9,7 +9,6 @@ import {
   ChevronRight,
   ClipboardList,
   FileText,
-  Hash,
   Info,
   Layers3,
   PackageSearch,
@@ -32,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { RfidScanModal } from "@/components/hmi/RfidScanModal";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/recepcion")({
@@ -67,20 +67,6 @@ const materials = [
     type: "Compuesto de caucho",
     traceability: ["Lote", "Palet", "Batch"],
   },
-  {
-    code: "Tela Firestone",
-    name: "Tela Firestone",
-    provider: "Textiles Norte",
-    type: "Tela",
-    traceability: ["Número de rollo"],
-  },
-  {
-    code: "Tela Flex",
-    name: "Tela Flex",
-    provider: "Textiles Norte",
-    type: "Tela",
-    traceability: ["Número de rollo"],
-  },
 ];
 
 const remitoNumber = "R-0087421";
@@ -95,26 +81,17 @@ type TracePalet = {
 function ReceptionRoute() {
   const [activeStep, setActiveStep] = useState(1);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  const [isEntryUnlocked, setIsEntryUnlocked] = useState(false);
   const [selectedMaterialCode, setSelectedMaterialCode] = useState("2006/1");
   const [lotNumber, setLotNumber] = useState("");
-  const [rollNumber, setRollNumber] = useState("");
   const [newPaletCode, setNewPaletCode] = useState("");
   const [tracePalets, setTracePalets] = useState<TracePalet[]>([]);
   const selectedMaterial =
     materials.find((material) => material.code === selectedMaterialCode) ?? materials[0];
-  const statusLabel = isConfirmed
-    ? "Ingreso confirmado"
-    : activeStep === 1
-      ? "Remito en edición"
-      : activeStep === 2
-        ? "Material en edición"
-        : activeStep === 3
-          ? "Trazabilidad en edición"
-          : "Recepción lista para confirmar";
+  const isAwaitingEntryAuth = !isConfirmed && !isEntryUnlocked;
   const handleMaterialChange = (value: string) => {
     setSelectedMaterialCode(value);
     setLotNumber("");
-    setRollNumber("");
     setNewPaletCode("");
     setTracePalets([]);
   };
@@ -170,9 +147,13 @@ function ReceptionRoute() {
     setActiveStep(1);
     setSelectedMaterialCode("2006/1");
     setLotNumber("");
-    setRollNumber("");
     setNewPaletCode("");
     setTracePalets([]);
+  };
+
+  const lockReceptionStart = () => {
+    resetReception();
+    setIsEntryUnlocked(false);
   };
 
   const handlePrimaryAction = () => {
@@ -184,10 +165,14 @@ function ReceptionRoute() {
     setIsConfirmed(true);
   };
 
+  const handleEntryAuth = () => {
+    setIsEntryUnlocked(true);
+  };
+
   return (
     <section className="min-h-screen bg-background px-4 py-5 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-6xl items-center justify-center">
-        <div className="w-full overflow-hidden rounded-lg border border-border/80 bg-card shadow-2xl shadow-black/35">
+        <div className="flex min-h-[calc(100vh-2.5rem)] w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-2xl shadow-black/35">
           <header className="border-b border-border/70 px-5 py-5 sm:px-8">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -228,7 +213,7 @@ function ReceptionRoute() {
               </Button>
             </div>
 
-            {!isConfirmed ? (
+            {!isConfirmed && !isAwaitingEntryAuth ? (
               <ol className="linear-scrollbar mt-7 flex items-center gap-4 overflow-x-auto pb-1">
                 {steps.map((step, index) => (
                   <StepItem
@@ -242,17 +227,19 @@ function ReceptionRoute() {
             ) : null}
           </header>
 
-          <form onSubmit={(event) => event.preventDefault()}>
-            <div className="min-h-[390px] px-5 py-7 sm:px-8 lg:px-12">
+          <form className="flex flex-1 flex-col" onSubmit={(event) => event.preventDefault()}>
+            <div className="min-h-[390px] flex-1 px-5 py-7 sm:px-8 lg:px-12">
               {isConfirmed ? (
                 <ConfirmedStep
                   selectedMaterial={selectedMaterial}
                   remito={remitoNumber}
                   lotNumber={lotNumber}
-                  rollNumber={rollNumber}
                   palets={tracePalets}
-                  onRegisterAnother={resetReception}
+                  onFinishTurn={lockReceptionStart}
+                  onRegisterAnotherRequest={resetReception}
                 />
+              ) : isAwaitingEntryAuth ? (
+                <LockedReceptionStart />
               ) : (
                 <>
                   {activeStep === 1 && <RemitoStep />}
@@ -268,11 +255,9 @@ function ReceptionRoute() {
                       selectedMaterial={selectedMaterial}
                       remito={remitoNumber}
                       lotNumber={lotNumber}
-                      rollNumber={rollNumber}
                       newPaletCode={newPaletCode}
                       palets={tracePalets}
                       onLotNumberChange={setLotNumber}
-                      onRollNumberChange={setRollNumber}
                       onNewPaletCodeChange={setNewPaletCode}
                       onAddPalet={addPalet}
                       onRemovePalet={removePalet}
@@ -285,7 +270,6 @@ function ReceptionRoute() {
                       selectedMaterial={selectedMaterial}
                       remito={remitoNumber}
                       lotNumber={lotNumber}
-                      rollNumber={rollNumber}
                       palets={tracePalets}
                     />
                   )}
@@ -293,55 +277,49 @@ function ReceptionRoute() {
               )}
             </div>
 
-            {!isConfirmed ? (
+            {!isConfirmed && !isAwaitingEntryAuth ? (
               <footer className="border-t border-border/70 bg-background/35 px-5 py-4 sm:px-8">
-                <div
-                  className={cn(
-                    "mx-auto flex w-full flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between",
-                    activeStep >= 3 ? "max-w-5xl" : "max-w-4xl",
-                  )}
-                >
-                  {activeStep === 1 ? (
-                    <Button
-                      asChild
-                      variant="ghost"
-                      className="justify-center text-foreground hover:bg-accent/70 sm:justify-start"
-                    >
-                      <Link to="/">Cancelar</Link>
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="justify-center text-foreground hover:bg-accent/70 sm:justify-start"
-                      onClick={() => setActiveStep((current) => Math.max(1, current - 1))}
-                    >
-                      Volver
-                    </Button>
-                  )}
+                <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                  <div className="order-2 flex justify-center sm:order-1 sm:justify-start">
+                    {activeStep === 1 ? (
+                      <Button
+                        asChild
+                        variant="ghost"
+                        className="justify-center text-foreground hover:bg-accent/70 sm:justify-start"
+                      >
+                        <Link to="/">Cancelar</Link>
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="justify-center text-foreground hover:bg-accent/70 sm:justify-start"
+                        onClick={() => setActiveStep((current) => Math.max(1, current - 1))}
+                      >
+                        Volver
+                      </Button>
+                    )}
+                  </div>
 
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-[#A8B1FF]" />
-                      {statusLabel}
-                    </div>
+                  <div className="order-1 flex justify-center sm:order-2 sm:justify-end">
                     <Button
                       type="button"
                       className="h-10 bg-[#5E6AD2] px-5 text-white hover:bg-[#6875E8]"
                       onClick={handlePrimaryAction}
                     >
                       {activeStep === 4 ? "Confirmar" : "Continuar"}
-                      {activeStep === 4 ? (
-                        <ShieldCheck className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )}
+                      {activeStep === 4 ? <ShieldCheck className="h-4 w-4" /> : null}
                     </Button>
                   </div>
                 </div>
               </footer>
             ) : null}
           </form>
+
+          <RfidScanModal
+            open={isAwaitingEntryAuth}
+            onAuth={handleEntryAuth}
+          />
         </div>
       </div>
     </section>
@@ -379,7 +357,6 @@ function RemitoStep() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="cauchos-del-plata">Cauchos del Plata</SelectItem>
-            <SelectItem value="textiles-norte">Textiles Norte</SelectItem>
             <SelectItem value="quimica-del-sur">Química del Sur</SelectItem>
           </SelectContent>
         </Select>
@@ -463,11 +440,9 @@ function TraceabilityStep({
   selectedMaterial,
   remito,
   lotNumber,
-  rollNumber,
   newPaletCode,
   palets,
   onLotNumberChange,
-  onRollNumberChange,
   onNewPaletCodeChange,
   onAddPalet,
   onRemovePalet,
@@ -477,73 +452,65 @@ function TraceabilityStep({
   selectedMaterial: (typeof materials)[number];
   remito: string;
   lotNumber: string;
-  rollNumber: string;
   newPaletCode: string;
   palets: TracePalet[];
   onLotNumberChange: (value: string) => void;
-  onRollNumberChange: (value: string) => void;
   onNewPaletCodeChange: (value: string) => void;
   onAddPalet: () => void;
   onRemovePalet: (paletId: string) => void;
   onTogglePalet: (paletId: string) => void;
   onAddBatchRange: (paletId: string, from: string, to: string) => boolean;
 }) {
-  const isFabric = selectedMaterial.type === "Tela";
-
   return (
     <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0 space-y-5">
-        {isFabric ? (
-          <FabricTraceabilityForm rollNumber={rollNumber} onRollNumberChange={onRollNumberChange} />
-        ) : (
-          <BandTraceabilityForm
-            selectedMaterial={selectedMaterial}
-            lotNumber={lotNumber}
-            newPaletCode={newPaletCode}
-            palets={palets}
-            onLotNumberChange={onLotNumberChange}
-            onNewPaletCodeChange={onNewPaletCodeChange}
-            onAddPalet={onAddPalet}
-            onRemovePalet={onRemovePalet}
-            onTogglePalet={onTogglePalet}
-            onAddBatchRange={onAddBatchRange}
-          />
-        )}
+        <BandTraceabilityForm
+          selectedMaterial={selectedMaterial}
+          lotNumber={lotNumber}
+          newPaletCode={newPaletCode}
+          palets={palets}
+          onLotNumberChange={onLotNumberChange}
+          onNewPaletCodeChange={onNewPaletCodeChange}
+          onAddPalet={onAddPalet}
+          onRemovePalet={onRemovePalet}
+          onTogglePalet={onTogglePalet}
+          onAddBatchRange={onAddBatchRange}
+        />
       </div>
 
       <LiveTraceabilityPanel
         selectedMaterial={selectedMaterial}
         remito={remito}
-        isFabric={isFabric}
         lotNumber={lotNumber}
-        rollNumber={rollNumber}
         palets={palets}
       />
     </div>
   );
 }
 
+function LockedReceptionStart() {
+  return <div className="mx-auto min-h-[390px] max-w-4xl" aria-hidden="true" />;
+}
+
 function ConfirmedStep({
   selectedMaterial,
   remito,
   lotNumber,
-  rollNumber,
   palets,
-  onRegisterAnother,
+  onFinishTurn,
+  onRegisterAnotherRequest,
 }: {
   selectedMaterial: (typeof materials)[number];
   remito: string;
   lotNumber: string;
-  rollNumber: string;
   palets: TracePalet[];
-  onRegisterAnother: () => void;
+  onFinishTurn: () => void;
+  onRegisterAnotherRequest: () => void;
 }) {
-  const isFabric = selectedMaterial.type === "Tela";
   const totalBatches = palets.reduce((total, palet) => total + palet.batches.length, 0);
   const totalPalets = palets.length;
   const displayLot = lotNumber.trim() || "Sin lote";
-  const displayRoll = rollNumber.trim() || "Sin rollo";
-  const traceSummary = isFabric ? `Rollo ${displayRoll}` : `Lote ${displayLot}`;
+  const traceSummary = `Lote ${displayLot}`;
 
   return (
     <div className="mx-auto flex min-h-[520px] max-w-3xl flex-col items-center justify-center py-10 text-center">
@@ -569,13 +536,13 @@ function ConfirmedStep({
       </div>
 
       <div className="mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row">
-        <Button asChild variant="secondary" className="h-10 flex-1">
-          <Link to="/">Finalizar turno</Link>
+        <Button type="button" variant="secondary" className="h-10 flex-1" onClick={onFinishTurn}>
+          Finalizar turno
         </Button>
         <Button
           type="button"
           className="h-10 flex-1 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
-          onClick={onRegisterAnother}
+          onClick={onRegisterAnotherRequest}
         >
           Registrar otro ingreso
         </Button>
@@ -588,19 +555,15 @@ function ConfirmStep({
   selectedMaterial,
   remito,
   lotNumber,
-  rollNumber,
   palets,
 }: {
   selectedMaterial: (typeof materials)[number];
   remito: string;
   lotNumber: string;
-  rollNumber: string;
   palets: TracePalet[];
 }) {
-  const isFabric = selectedMaterial.type === "Tela";
   const totalBatches = palets.reduce((total, palet) => total + palet.batches.length, 0);
   const displayLot = lotNumber.trim() || "Sin lote";
-  const displayRoll = rollNumber.trim() || "Sin rollo";
   const lotSummary = `${palets.length} ${palets.length === 1 ? "palet" : "palets"}, ${totalBatches} ${
     totalBatches === 1 ? "batch" : "batches"
   }`;
@@ -630,69 +593,57 @@ function ConfirmStep({
           Trazabilidad
         </div>
 
-        {isFabric ? (
-          <div className="mt-4 rounded-md border border-border/70 bg-card/60 px-4 py-3">
-            <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              <Hash className="h-3.5 w-3.5 text-[#A8B1FF]" />
-              Número de rollo
-            </div>
-            <div className="mt-2 font-mono text-[15px] font-semibold text-foreground">
-              {displayRoll}
-            </div>
+        <div className="mt-4 rounded-md border border-border/70 bg-card/60 px-4 py-3">
+          <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            <FileText className="h-3.5 w-3.5 text-[#A8B1FF]" />
+            Lote
           </div>
-        ) : (
-          <div className="mt-4 rounded-md border border-border/70 bg-card/60 px-4 py-3">
-            <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-              <FileText className="h-3.5 w-3.5 text-[#A8B1FF]" />
-              Lote
-            </div>
-            <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-              <span className="font-mono text-[15px] font-semibold text-foreground">
-                {displayLot}
-              </span>
-              <span className="text-[12.5px] text-muted-foreground">({lotSummary})</span>
-            </div>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="font-mono text-[15px] font-semibold text-foreground">
+              {displayLot}
+            </span>
+            <span className="text-[12.5px] text-muted-foreground">({lotSummary})</span>
+          </div>
 
-            {palets.length === 0 ? (
-              <div className="mt-4 rounded-md border border-dashed border-border/80 bg-background/30 px-3 py-2 text-[12.5px] text-muted-foreground">
-                Sin palets registrados.
-              </div>
-            ) : (
-              <div className="mt-4 space-y-4 border-l border-border/80 pl-4">
-                {palets.map((palet) => (
-                  <div key={palet.id}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
-                      <span className="font-mono text-[13.5px] font-semibold text-foreground">
-                        Palet {palet.code}
-                      </span>
-                      <span className="text-[12px] text-muted-foreground">
-                        {palet.batches.length} batches
-                      </span>
-                    </div>
-
-                    {palet.batches.length === 0 ? (
-                      <div className="mt-2 text-[12.5px] text-muted-foreground">
-                        Sin batches registrados.
-                      </div>
-                    ) : (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {palet.batches.map((batch) => (
-                          <span
-                            key={`${palet.id}-${batch}`}
-                            className="flex h-7 min-w-8 items-center justify-center rounded-md border border-border/80 bg-background/45 px-2 font-mono text-[12px] text-foreground"
-                          >
-                            {batch}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+          {palets.length === 0 ? (
+            <div className="mt-4 rounded-md border border-dashed border-border/80 bg-background/30 px-3 py-2 text-[12.5px] text-muted-foreground">
+              Sin palets registrados.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4 border-l border-border/80 pl-4">
+              {palets.map((palet) => (
+                <div key={palet.id}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
+                    <span className="font-mono text-[13.5px] font-semibold text-foreground">
+                      Palet {palet.code}
+                    </span>
+                    <span className="text-[12px] text-muted-foreground">
+                      {palet.batches.length} batches
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+
+                  {palet.batches.length === 0 ? (
+                    <div className="mt-2 text-[12.5px] text-muted-foreground">
+                      Sin batches registrados.
+                    </div>
+                  ) : (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {palet.batches.map((batch) => (
+                        <span
+                          key={`${palet.id}-${batch}`}
+                          className="flex h-7 min-w-8 items-center justify-center rounded-md border border-border/80 bg-background/45 px-2 font-mono text-[12px] text-foreground"
+                        >
+                          {batch}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
@@ -912,57 +863,19 @@ function EmptyTraceState({ message }: { message: string }) {
   );
 }
 
-function FabricTraceabilityForm({
-  rollNumber,
-  onRollNumberChange,
-}: {
-  rollNumber: string;
-  onRollNumberChange: (value: string) => void;
-}) {
-  return (
-    <>
-      <FieldBlock id="numero-rollo" label="Número de rollo" required>
-        <Input
-          id="numero-rollo"
-          value={rollNumber}
-          onChange={(event) => onRollNumberChange(event.target.value)}
-          placeholder="Ej. ROL-FIR-0142"
-          className="reception-field h-11 max-w-md font-mono text-[13.5px]"
-        />
-      </FieldBlock>
-
-      <div className="rounded-lg border border-[#5E6AD2]/45 bg-[#5E6AD2]/10 p-5">
-        <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground">
-          <Info className="h-4 w-4 text-[#A8B1FF]" />
-          Trazabilidad requerida para este material
-        </div>
-        <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
-          Este material tiene un único nivel de trazabilidad. Registrá el número de rollo de la tela
-          recibida.
-        </p>
-      </div>
-    </>
-  );
-}
-
 function LiveTraceabilityPanel({
   selectedMaterial,
   remito,
-  isFabric,
   lotNumber,
-  rollNumber,
   palets,
 }: {
   selectedMaterial: (typeof materials)[number];
   remito: string;
-  isFabric: boolean;
   lotNumber: string;
-  rollNumber: string;
   palets: TracePalet[];
 }) {
   const totalBatches = palets.reduce((total, palet) => total + palet.batches.length, 0);
   const displayLot = lotNumber.trim() || "Sin lote";
-  const displayRoll = rollNumber.trim() || "Sin rollo";
 
   return (
     <aside className="min-w-0">
@@ -983,66 +896,43 @@ function LiveTraceabilityPanel({
         </div>
 
         <div className="mt-4 border-t border-border/70 pt-4">
-          {isFabric ? (
+          <div className="space-y-3">
             <div className="flex items-start gap-2">
-              <Hash className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
+              <FileText className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
               <div>
                 <div className="font-mono text-[13px] font-semibold text-foreground">
-                  Rollo {displayRoll}
+                  Lote {displayLot}
                 </div>
-                <div className="mt-1 text-[12px] text-muted-foreground">
-                  1 nivel de trazabilidad
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-start gap-2">
-                <FileText className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
-                <div>
-                  <div className="font-mono text-[13px] font-semibold text-foreground">
-                    Lote {displayLot}
+                {palets.length === 0 ? (
+                  <div className="mt-2 text-[12px] text-muted-foreground">
+                    Sin palets registrados
                   </div>
-                  {palets.length === 0 ? (
-                    <div className="mt-2 text-[12px] text-muted-foreground">
-                      Sin palets registrados
-                    </div>
-                  ) : (
-                    <div className="mt-2 space-y-2 border-l border-border/80 pl-4">
-                      {palets.map((palet) => (
-                        <div key={palet.id} className="flex items-start gap-2">
-                          <Layers3 className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
-                          <div>
-                            <div className="font-mono text-[13px] font-semibold text-foreground">
-                              Palet {palet.code}
-                            </div>
-                            <div className="mt-0.5 text-[12px] text-muted-foreground">
-                              {palet.batches.length} batches
-                            </div>
+                ) : (
+                  <div className="mt-2 space-y-2 border-l border-border/80 pl-4">
+                    {palets.map((palet) => (
+                      <div key={palet.id} className="flex items-start gap-2">
+                        <Layers3 className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
+                        <div>
+                          <div className="font-mono text-[13px] font-semibold text-foreground">
+                            Palet {palet.code}
+                          </div>
+                          <div className="mt-0.5 text-[12px] text-muted-foreground">
+                            {palet.batches.length} batches
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        {isFabric ? (
-          <>
-            <LiveMetric label="Niveles" value="1" />
-            <LiveMetric label="Rollo" value={displayRoll} mono />
-          </>
-        ) : (
-          <>
-            <LiveMetric label="Palets" value={String(palets.length)} />
-            <LiveMetric label="Batches" value={String(totalBatches)} />
-          </>
-        )}
+        <LiveMetric label="Palets" value={String(palets.length)} />
+        <LiveMetric label="Batches" value={String(totalBatches)} />
       </div>
     </aside>
   );
@@ -1109,8 +999,7 @@ function mergeBatches(current: string[], next: string[]) {
 }
 
 function materialLabel(material: (typeof materials)[number]) {
-  if (material.type === "Tela") return material.name;
-  return `${material.code} — ${material.name}`;
+  return `${material.code} - ${material.name}`;
 }
 
 function MaterialMeta({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
