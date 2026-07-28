@@ -10,7 +10,6 @@ import {
   FileText,
   Info,
   Layers3,
-  PackageSearch,
   Plus,
   ScanLine,
   ShieldCheck,
@@ -30,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { RfidScanModal } from "@/components/hmi/RfidScanModal";
 import { cn } from "@/lib/utils";
 
@@ -39,48 +37,27 @@ export const Route = createFileRoute("/recepcion")({
 });
 
 const steps = [
-  { number: 1, label: "Paso 1", title: "Remito", icon: FileText },
-  { number: 2, label: "Paso 2", title: "Material", icon: PackageSearch },
-  { number: 3, label: "Paso 3", title: "Trazabilidad", icon: ScanLine },
-  { number: 4, label: "Paso 4", title: "Confirmar", icon: ShieldCheck },
+  { number: 1, label: "Paso 1", title: "Ingreso", icon: FileText },
+  { number: 2, label: "Paso 2", title: "Trazabilidad", icon: ScanLine },
+  { number: 3, label: "Paso 3", title: "Confirmar", icon: ShieldCheck },
 ];
 
 const materials = [
   {
     code: "2006/1",
-    name: "Caucho banda 2006/1",
     provider: "Química del Sur",
-    type: "Compuesto de caucho",
     traceability: ["Lote", "Palet", "Batch"],
   },
   {
-    code: "2008/2",
-    name: "Caucho banda 2008/2",
+    code: "2008/1",
     provider: "Química del Sur",
-    type: "Compuesto de caucho",
-    traceability: ["Lote", "Palet", "Batch"],
-  },
-  {
-    code: "2010/2",
-    name: "Caucho banda 2010/2",
-    provider: "Química del Sur",
-    type: "Compuesto de caucho",
     traceability: ["Lote", "Palet", "Batch"],
   },
 ];
 
 const remitoExample = "R-0087421";
 
-const providers = [
-  { value: "cauchos-del-plata", label: "Cauchos del Plata" },
-  { value: "quimica-del-sur", label: "Química del Sur" },
-];
-
 type Material = (typeof materials)[number];
-
-function providerLabel(providerValue: string) {
-  return providers.find((provider) => provider.value === providerValue)?.label ?? "";
-}
 
 type TracePalet = {
   id: string;
@@ -95,19 +72,16 @@ function ReceptionRoute() {
   const [isEntryUnlocked, setIsEntryUnlocked] = useState(false);
   const [remito, setRemito] = useState("");
   const [receptionDate, setReceptionDate] = useState("");
-  const [selectedProvider, setSelectedProvider] = useState("");
   const [selectedMaterialCode, setSelectedMaterialCode] = useState("");
   const [lotNumber, setLotNumber] = useState("");
   const [newPaletCode, setNewPaletCode] = useState("");
   const [tracePalets, setTracePalets] = useState<TracePalet[]>([]);
   const selectedMaterial = materials.find((material) => material.code === selectedMaterialCode);
-  const selectedProviderLabel = providerLabel(selectedProvider);
-  const receptionProvider = selectedProviderLabel || selectedMaterial?.provider || "";
+  const receptionProvider = selectedMaterial?.provider ?? "";
   const isAwaitingEntryAuth = !isConfirmed && !isEntryUnlocked;
   const canContinue =
-    (activeStep === 1 && Boolean(remito.trim() && receptionDate && selectedProvider)) ||
-    (activeStep === 2 && Boolean(selectedMaterial)) ||
-    activeStep > 2;
+    (activeStep === 1 && Boolean(remito.trim() && receptionDate && selectedMaterial)) ||
+    activeStep > 1;
   const handleMaterialChange = (value: string) => {
     setSelectedMaterialCode(value);
     setLotNumber("");
@@ -166,7 +140,6 @@ function ReceptionRoute() {
     setActiveStep(1);
     setRemito("");
     setReceptionDate("");
-    setSelectedProvider("");
     setSelectedMaterialCode("");
     setLotNumber("");
     setNewPaletCode("");
@@ -185,7 +158,7 @@ function ReceptionRoute() {
       setRemito(remito.trim());
     }
 
-    if (activeStep < 4) {
+    if (activeStep < 3) {
       setActiveStep((current) => current + 1);
       return;
     }
@@ -209,21 +182,18 @@ function ReceptionRoute() {
                   Recepción
                 </div>
                 <h1 className="text-[24px] font-semibold tracking-tight text-foreground sm:text-[28px]">
-                  {isConfirmed ? "Ingreso registrado" : "Nuevo ingreso de materia prima"}
+                  {isConfirmed ? "Ingreso registrado" : "Nuevo ingreso de material"}
                 </h1>
                 <p className="mt-1 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
                   {isConfirmed
                     ? "El material queda pendiente de aprobación de Calidad."
                     : activeStep === 1 &&
-                      "Cargá el remito, elegí el proveedor y registrá las observaciones iniciales."}
+                      "Cargá remito, fecha y material; el proveedor se completa automáticamente."}
                   {!isConfirmed &&
                     activeStep === 2 &&
-                    "Cargá el remito, elegí el material y revisá la trazabilidad requerida."}
-                  {!isConfirmed &&
-                    activeStep === 3 &&
                     "Cargá los identificadores y revisá la trazabilidad en vivo."}
                   {!isConfirmed &&
-                    activeStep === 4 &&
+                    activeStep === 3 &&
                     "Revisá el resumen antes de confirmar el ingreso."}
                 </p>
               </div>
@@ -242,7 +212,7 @@ function ReceptionRoute() {
             </div>
 
             {!isConfirmed && !isAwaitingEntryAuth ? (
-              <ol className="linear-scrollbar mt-7 flex items-center gap-4 overflow-x-auto pb-1">
+              <ol className="linear-scrollbar mt-7 flex w-full items-center overflow-x-auto pb-1">
                 {steps.map((step, index) => (
                   <StepItem
                     key={step.number}
@@ -276,23 +246,17 @@ function ReceptionRoute() {
               ) : (
                 <>
                   {activeStep === 1 && (
-                    <RemitoStep
+                    <ReceptionDetailsStep
                       remito={remito}
                       receptionDate={receptionDate}
-                      selectedProvider={selectedProvider}
-                      onRemitoChange={setRemito}
-                      onReceptionDateChange={setReceptionDate}
-                      onProviderChange={setSelectedProvider}
-                    />
-                  )}
-                  {activeStep === 2 && (
-                    <MaterialStep
                       selectedMaterial={selectedMaterial}
                       selectedMaterialCode={selectedMaterialCode}
+                      onRemitoChange={setRemito}
+                      onReceptionDateChange={setReceptionDate}
                       onMaterialChange={handleMaterialChange}
                     />
                   )}
-                  {activeStep === 3 && (
+                  {activeStep === 2 && (
                     <TraceabilityStep
                       selectedMaterial={selectedMaterial}
                       remito={remito}
@@ -308,7 +272,7 @@ function ReceptionRoute() {
                       onAddBatchRange={addBatchRange}
                     />
                   )}
-                  {activeStep === 4 && (
+                  {activeStep === 3 && (
                     <ConfirmStep
                       selectedMaterial={selectedMaterial}
                       remito={remito}
@@ -352,8 +316,8 @@ function ReceptionRoute() {
                       onClick={handlePrimaryAction}
                       disabled={!canContinue}
                     >
-                      {activeStep === 4 ? "Confirmar" : "Continuar"}
-                      {activeStep === 4 ? <ShieldCheck className="h-4 w-4" /> : null}
+                      {activeStep === 3 ? "Confirmar" : "Continuar"}
+                      {activeStep === 3 ? <ShieldCheck className="h-4 w-4" /> : null}
                     </Button>
                   </div>
                 </div>
@@ -368,20 +332,22 @@ function ReceptionRoute() {
   );
 }
 
-function RemitoStep({
+function ReceptionDetailsStep({
   remito,
   receptionDate,
-  selectedProvider,
+  selectedMaterial,
+  selectedMaterialCode,
   onRemitoChange,
   onReceptionDateChange,
-  onProviderChange,
+  onMaterialChange,
 }: {
   remito: string;
   receptionDate: string;
-  selectedProvider: string;
+  selectedMaterial?: Material;
+  selectedMaterialCode: string;
   onRemitoChange: (value: string) => void;
   onReceptionDateChange: (value: string) => void;
-  onProviderChange: (value: string) => void;
+  onMaterialChange: (value: string) => void;
 }) {
   return (
     <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-2">
@@ -409,48 +375,13 @@ function RemitoStep({
         />
       </FieldBlock>
 
-      <FieldBlock id="proveedor" label="Proveedor" required className="md:col-span-2">
-        <Select value={selectedProvider} onValueChange={onProviderChange}>
-          <SelectTrigger id="proveedor" className="reception-select-trigger h-11 text-[13.5px]">
-            <SelectValue placeholder="Seleccionar proveedor" />
-          </SelectTrigger>
-          <SelectContent>
-            {providers.map((provider) => (
-              <SelectItem key={provider.value} value={provider.value}>
-                {provider.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </FieldBlock>
-
-      <FieldBlock id="observaciones" label="Observaciones" className="md:col-span-2">
-        <Textarea
-          id="observaciones"
-          placeholder="Notas sobre la recepción, condiciones del transporte, etc."
-          autoComplete="off"
-          className="reception-field min-h-28 resize-none text-[13.5px]"
-        />
-      </FieldBlock>
-    </div>
-  );
-}
-
-function MaterialStep({
-  selectedMaterial,
-  selectedMaterialCode,
-  onMaterialChange,
-}: {
-  selectedMaterial?: Material;
-  selectedMaterialCode: string;
-  onMaterialChange: (value: string) => void;
-}) {
-  return (
-    <div className="mx-auto max-w-4xl">
       <FieldBlock id="material" label="Material" required>
         <Select value={selectedMaterialCode} onValueChange={onMaterialChange}>
-          <SelectTrigger id="material" className="reception-select-trigger h-14 text-[13.5px]">
-            <SelectValue placeholder="Seleccionar material" />
+          <SelectTrigger
+            id="material"
+            className="reception-select-trigger h-11 text-left text-[13.5px] data-[placeholder]:text-muted-foreground"
+          >
+            <SelectValue placeholder="Seleccionar el tipo de material" />
           </SelectTrigger>
           <SelectContent>
             {materials.map((material) => (
@@ -459,46 +390,53 @@ function MaterialStep({
                 value={material.code}
                 textValue={materialLabel(material)}
               >
-                <span className="text-[13.5px] font-semibold text-foreground">
-                  {materialLabel(material)}
-                </span>
+                {materialLabel(material)}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </FieldBlock>
 
-      {selectedMaterial ? (
-        <>
-          <div className="mt-6 rounded-lg border border-[#5E6AD2]/45 bg-[#5E6AD2]/10 p-5">
-            <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground">
-              <Info className="h-4 w-4 text-[#A8B1FF]" />
-              Trazabilidad requerida para este material
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              {selectedMaterial.traceability.map((level, index) => (
-                <div key={level} className="flex items-center gap-2">
-                  <span className="rounded-md border border-[#5E6AD2]/55 bg-background/50 px-3 py-1.5 text-[13px] font-semibold text-foreground">
-                    {level}
-                  </span>
-                  {index < selectedMaterial.traceability.length - 1 && (
-                    <ChevronRight className="h-4 w-4 text-[#A8B1FF]" />
-                  )}
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-[12.5px] leading-relaxed text-muted-foreground">
-              En el próximo paso vas a cargar los identificadores para cada nivel.
-            </p>
-          </div>
+      <FieldBlock id="proveedor" label="Proveedor" required>
+        <Input
+          id="proveedor"
+          value={selectedMaterial?.provider ?? ""}
+          readOnly
+          placeholder="Se completa al seleccionar material"
+          autoComplete="off"
+          className="reception-field h-11 text-[13.5px]"
+        />
+      </FieldBlock>
 
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
-            <MaterialMeta label="Proveedor" value={selectedMaterial.provider} />
-            <MaterialMeta label="Tipo" value={selectedMaterial.type} />
-            <MaterialMeta label="Código" value={selectedMaterial.code} mono />
+      <div className="rounded-lg border border-[#5E6AD2]/45 bg-[#5E6AD2]/10 p-5 md:col-span-2">
+        <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground">
+          <Info className="h-4 w-4 text-[#A8B1FF]" />
+          Trazabilidad requerida para este material
+        </div>
+        {selectedMaterial ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            {selectedMaterial.traceability.map((level, index) => (
+              <div key={level} className="flex items-center gap-2">
+                <span className="rounded-md border border-[#5E6AD2]/55 bg-background/50 px-3 py-1.5 text-[13px] font-semibold text-foreground">
+                  {level}
+                </span>
+                {index < selectedMaterial.traceability.length - 1 && (
+                  <ChevronRight className="h-4 w-4 text-[#A8B1FF]" />
+                )}
+              </div>
+            ))}
           </div>
-        </>
-      ) : null}
+        ) : (
+          <p className="mt-4 text-[12.5px] leading-relaxed text-muted-foreground">
+            Seleccioná un material para ver la trazabilidad requerida.
+          </p>
+        )}
+        {selectedMaterial ? (
+          <p className="mt-4 text-[12.5px] leading-relaxed text-muted-foreground">
+            En el próximo paso vas a cargar los identificadores para cada nivel.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -583,7 +521,7 @@ function ConfirmedStep({
   const totalPalets = palets.length;
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
-  const displayMaterial = selectedMaterial?.name ?? "Sin material";
+  const displayMaterial = selectedMaterial?.code ?? "Sin material";
   const displayLot = lotNumber.trim() || "Sin lote";
   const traceSummary = `Lote ${displayLot}`;
 
@@ -643,8 +581,7 @@ function ConfirmStep({
   const totalBatches = palets.reduce((total, palet) => total + palet.batches.length, 0);
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
-  const displayMaterial = selectedMaterial?.name ?? "Sin material";
-  const displayType = selectedMaterial?.type ?? "Sin tipo";
+  const displayMaterial = selectedMaterial?.code ?? "Sin material";
   const displayLot = lotNumber.trim() || "Sin lote";
   const lotSummary = `${palets.length} ${palets.length === 1 ? "palet" : "palets"}, ${totalBatches} ${
     totalBatches === 1 ? "batch" : "batches"
@@ -662,11 +599,10 @@ function ConfirmStep({
         </p>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-3">
         <MaterialMeta label="Remito" value={displayRemito} mono />
         <MaterialMeta label="Proveedor" value={displayProvider} />
         <MaterialMeta label="Material" value={displayMaterial} />
-        <MaterialMeta label="Tipo" value={displayType} />
       </div>
 
       <section className="rounded-lg border border-border/80 bg-background/35 p-5">
@@ -787,8 +723,7 @@ function BandTraceabilityForm({
           />
           <Button
             type="button"
-            variant="secondary"
-            className="h-10 bg-secondary/80 text-foreground hover:bg-accent"
+            className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
             onClick={onAddPalet}
           >
             <Plus className="h-4 w-4" />
@@ -832,7 +767,11 @@ function PaletTraceCard({
   const [batchTo, setBatchTo] = useState("");
 
   const addRange = () => {
-    onAddBatchRange(batchFrom, batchTo);
+    const wasAdded = onAddBatchRange(batchFrom, batchTo);
+    if (!wasAdded) return;
+
+    setBatchFrom("");
+    setBatchTo("");
   };
 
   return (
@@ -849,9 +788,7 @@ function PaletTraceCard({
             </span>
           </div>
           <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-            {selectedMaterial
-              ? `${selectedMaterial.code} · ${selectedMaterial.type}`
-              : "Sin material seleccionado"}
+            {selectedMaterial ? selectedMaterial.code : "Sin material seleccionado"}
           </div>
         </div>
         <div className="ml-auto flex items-center gap-1">
@@ -984,7 +921,7 @@ function LiveTraceabilityPanel({
       <div className="rounded-lg border border-border/80 bg-background/35 p-4">
         <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
           <Boxes className="h-4 w-4 text-[#A8B1FF]" />
-          {selectedMaterial?.name ?? "Sin material seleccionado"}
+          {selectedMaterial?.code ?? "Sin material seleccionado"}
         </div>
 
         <div className="mt-4 border-t border-border/70 pt-4">
@@ -1091,7 +1028,7 @@ function mergeBatches(current: string[], next: string[]) {
 }
 
 function materialLabel(material: (typeof materials)[number]) {
-  return `${material.code} - ${material.name}`;
+  return material.code;
 }
 
 function MaterialMeta({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -1122,7 +1059,8 @@ function StepItem({
 
   return (
     <li className="flex min-w-[176px] flex-1 items-center">
-      <div className="flex min-w-0 items-center gap-3">
+      {step.number > 1 ? <span className="mr-4 h-px min-w-8 flex-1 bg-border/80" /> : null}
+      <div className="flex min-w-0 shrink-0 items-center gap-3">
         <span
           className={cn(
             "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[13px] font-semibold",
