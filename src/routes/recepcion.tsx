@@ -66,6 +66,13 @@ type TracePalet = {
   expanded: boolean;
 };
 
+type TraceLot = {
+  id: string;
+  code: string;
+  palets: TracePalet[];
+  expanded: boolean;
+};
+
 function ReceptionRoute() {
   const [activeStep, setActiveStep] = useState(1);
   const [isConfirmed, setIsConfirmed] = useState(false);
@@ -73,9 +80,7 @@ function ReceptionRoute() {
   const [remito, setRemito] = useState("");
   const [receptionDate, setReceptionDate] = useState("");
   const [selectedMaterialCode, setSelectedMaterialCode] = useState("");
-  const [lotNumber, setLotNumber] = useState("");
-  const [newPaletCode, setNewPaletCode] = useState("");
-  const [tracePalets, setTracePalets] = useState<TracePalet[]>([]);
+  const [traceLots, setTraceLots] = useState<TraceLot[]>([]);
   const selectedMaterial = materials.find((material) => material.code === selectedMaterialCode);
   const receptionProvider = selectedMaterial?.provider ?? "";
   const isAwaitingEntryAuth = !isConfirmed && !isEntryUnlocked;
@@ -84,52 +89,109 @@ function ReceptionRoute() {
     activeStep > 1;
   const handleMaterialChange = (value: string) => {
     setSelectedMaterialCode(value);
-    setLotNumber("");
-    setNewPaletCode("");
-    setTracePalets([]);
+    setTraceLots([]);
   };
 
-  const addPalet = () => {
-    const code = normalizeTraceCode(newPaletCode);
-    if (!code) return;
+  const addLot = (value: string) => {
+    const code = normalizeTraceCode(value);
+    if (!code) return false;
 
-    setTracePalets((current) => {
-      if (current.some((palet) => palet.code.toLowerCase() === code.toLowerCase())) {
-        return current;
-      }
+    if (traceLots.some((lot) => lot.code.toLowerCase() === code.toLowerCase())) {
+      return false;
+    }
 
-      return [
-        ...current.map((palet) => ({ ...palet, expanded: false })),
-        {
-          id: `${code}-${Date.now()}`,
-          code,
-          batches: [],
-          expanded: true,
-        },
-      ];
-    });
-    setNewPaletCode("");
+    setTraceLots((current) => [
+      ...current.map((lot) => ({ ...lot, expanded: false })),
+      {
+        id: `lot-${code}-${Date.now()}`,
+        code,
+        palets: [],
+        expanded: true,
+      },
+    ]);
+    return true;
   };
 
-  const removePalet = (paletId: string) => {
-    setTracePalets((current) => current.filter((palet) => palet.id !== paletId));
+  const removeLot = (lotId: string) => {
+    setTraceLots((current) => current.filter((lot) => lot.id !== lotId));
   };
 
-  const togglePalet = (paletId: string) => {
-    setTracePalets((current) =>
-      current.map((palet) =>
-        palet.id === paletId ? { ...palet, expanded: !palet.expanded } : palet,
+  const toggleLot = (lotId: string) => {
+    setTraceLots((current) =>
+      current.map((lot) => (lot.id === lotId ? { ...lot, expanded: !lot.expanded } : lot)),
+    );
+  };
+
+  const addPalet = (lotId: string, value: string) => {
+    const code = normalizeTraceCode(value);
+    if (!code) return false;
+
+    setTraceLots((current) =>
+      current.map((lot) => {
+        if (lot.id !== lotId) return lot;
+
+        if (lot.palets.some((palet) => palet.code.toLowerCase() === code.toLowerCase())) {
+          return lot;
+        }
+
+        return {
+          ...lot,
+          palets: [
+            ...lot.palets.map((palet) => ({ ...palet, expanded: false })),
+            {
+              id: `palet-${code}-${Date.now()}`,
+              code,
+              batches: [],
+              expanded: true,
+            },
+          ],
+        };
+      }),
+    );
+    return true;
+  };
+
+  const removePalet = (lotId: string, paletId: string) => {
+    setTraceLots((current) =>
+      current.map((lot) =>
+        lot.id === lotId
+          ? { ...lot, palets: lot.palets.filter((palet) => palet.id !== paletId) }
+          : lot,
       ),
     );
   };
 
-  const addBatchRange = (paletId: string, from: string, to: string) => {
+  const togglePalet = (lotId: string, paletId: string) => {
+    setTraceLots((current) =>
+      current.map((lot) =>
+        lot.id === lotId
+          ? {
+              ...lot,
+              palets: lot.palets.map((palet) =>
+                palet.id === paletId ? { ...palet, expanded: !palet.expanded } : palet,
+              ),
+            }
+          : lot,
+      ),
+    );
+  };
+
+  const addBatchRange = (lotId: string, paletId: string, from: string, to: string) => {
     const range = createBatchRange(from, to);
     if (range.length === 0) return false;
 
-    setTracePalets((current) =>
-      current.map((palet) =>
-        palet.id === paletId ? { ...palet, batches: mergeBatches(palet.batches, range) } : palet,
+    setTraceLots((current) =>
+      current.map((lot) =>
+        lot.id === lotId
+          ? {
+              ...lot,
+              palets: lot.palets.map((palet) =>
+                palet.id === paletId
+                  ? { ...palet, batches: mergeBatches(palet.batches, range) }
+                  : palet,
+              ),
+            }
+          : lot,
       ),
     );
     return true;
@@ -141,9 +203,7 @@ function ReceptionRoute() {
     setRemito("");
     setReceptionDate("");
     setSelectedMaterialCode("");
-    setLotNumber("");
-    setNewPaletCode("");
-    setTracePalets([]);
+    setTraceLots([]);
   };
 
   const lockReceptionStart = () => {
@@ -236,8 +296,7 @@ function ReceptionRoute() {
                   selectedMaterial={selectedMaterial}
                   remito={remito}
                   provider={receptionProvider}
-                  lotNumber={lotNumber}
-                  palets={tracePalets}
+                  lots={traceLots}
                   onFinishTurn={lockReceptionStart}
                   onRegisterAnotherRequest={resetReception}
                 />
@@ -261,11 +320,10 @@ function ReceptionRoute() {
                       selectedMaterial={selectedMaterial}
                       remito={remito}
                       provider={receptionProvider}
-                      lotNumber={lotNumber}
-                      newPaletCode={newPaletCode}
-                      palets={tracePalets}
-                      onLotNumberChange={setLotNumber}
-                      onNewPaletCodeChange={setNewPaletCode}
+                      lots={traceLots}
+                      onAddLot={addLot}
+                      onRemoveLot={removeLot}
+                      onToggleLot={toggleLot}
                       onAddPalet={addPalet}
                       onRemovePalet={removePalet}
                       onTogglePalet={togglePalet}
@@ -277,8 +335,7 @@ function ReceptionRoute() {
                       selectedMaterial={selectedMaterial}
                       remito={remito}
                       provider={receptionProvider}
-                      lotNumber={lotNumber}
-                      palets={tracePalets}
+                      lots={traceLots}
                     />
                   )}
                 </>
@@ -445,11 +502,10 @@ function TraceabilityStep({
   selectedMaterial,
   remito,
   provider,
-  lotNumber,
-  newPaletCode,
-  palets,
-  onLotNumberChange,
-  onNewPaletCodeChange,
+  lots,
+  onAddLot,
+  onRemoveLot,
+  onToggleLot,
   onAddPalet,
   onRemovePalet,
   onTogglePalet,
@@ -458,26 +514,23 @@ function TraceabilityStep({
   selectedMaterial?: Material;
   remito: string;
   provider: string;
-  lotNumber: string;
-  newPaletCode: string;
-  palets: TracePalet[];
-  onLotNumberChange: (value: string) => void;
-  onNewPaletCodeChange: (value: string) => void;
-  onAddPalet: () => void;
-  onRemovePalet: (paletId: string) => void;
-  onTogglePalet: (paletId: string) => void;
-  onAddBatchRange: (paletId: string, from: string, to: string) => boolean;
+  lots: TraceLot[];
+  onAddLot: (value: string) => boolean;
+  onRemoveLot: (lotId: string) => void;
+  onToggleLot: (lotId: string) => void;
+  onAddPalet: (lotId: string, value: string) => boolean;
+  onRemovePalet: (lotId: string, paletId: string) => void;
+  onTogglePalet: (lotId: string, paletId: string) => void;
+  onAddBatchRange: (lotId: string, paletId: string, from: string, to: string) => boolean;
 }) {
   return (
     <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0 space-y-5">
-        <BandTraceabilityForm
-          selectedMaterial={selectedMaterial}
-          lotNumber={lotNumber}
-          newPaletCode={newPaletCode}
-          palets={palets}
-          onLotNumberChange={onLotNumberChange}
-          onNewPaletCodeChange={onNewPaletCodeChange}
+        <LotTraceabilityForm
+          lots={lots}
+          onAddLot={onAddLot}
+          onRemoveLot={onRemoveLot}
+          onToggleLot={onToggleLot}
           onAddPalet={onAddPalet}
           onRemovePalet={onRemovePalet}
           onTogglePalet={onTogglePalet}
@@ -489,8 +542,7 @@ function TraceabilityStep({
         selectedMaterial={selectedMaterial}
         remito={remito}
         provider={provider}
-        lotNumber={lotNumber}
-        palets={palets}
+        lots={lots}
       />
     </div>
   );
@@ -504,26 +556,26 @@ function ConfirmedStep({
   selectedMaterial,
   remito,
   provider,
-  lotNumber,
-  palets,
+  lots,
   onFinishTurn,
   onRegisterAnotherRequest,
 }: {
   selectedMaterial?: Material;
   remito: string;
   provider: string;
-  lotNumber: string;
-  palets: TracePalet[];
+  lots: TraceLot[];
   onFinishTurn: () => void;
   onRegisterAnotherRequest: () => void;
 }) {
-  const totalBatches = palets.reduce((total, palet) => total + palet.batches.length, 0);
-  const totalPalets = palets.length;
+  const totalBatches = getTotalBatches(lots);
+  const totalPalets = getTotalPalets(lots);
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
   const displayMaterial = selectedMaterial?.code ?? "Sin material";
-  const displayLot = lotNumber.trim() || "Sin lote";
-  const traceSummary = `Lote ${displayLot}`;
+  const traceSummary =
+    lots.length === 0
+      ? "Sin lotes cargados"
+      : `${lots.length} ${pluralize(lots.length, "lote", "lotes")} registrados`;
 
   return (
     <div className="mx-auto flex min-h-[520px] max-w-3xl flex-col items-center justify-center py-10 text-center">
@@ -544,9 +596,10 @@ function ConfirmedStep({
         aprobación de Calidad.
       </p>
 
-      <div className="mt-8 grid w-full max-w-md grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="mt-8 grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
+        <LiveMetric label="Lotes" value={String(lots.length)} />
         <LiveMetric label="Palets" value={String(totalPalets)} />
-        <LiveMetric label="Batchs" value={String(totalBatches)} />
+        <LiveMetric label="Batches" value={String(totalBatches)} />
       </div>
 
       <div className="mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row">
@@ -569,23 +622,16 @@ function ConfirmStep({
   selectedMaterial,
   remito,
   provider,
-  lotNumber,
-  palets,
+  lots,
 }: {
   selectedMaterial?: Material;
   remito: string;
   provider: string;
-  lotNumber: string;
-  palets: TracePalet[];
+  lots: TraceLot[];
 }) {
-  const totalBatches = palets.reduce((total, palet) => total + palet.batches.length, 0);
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
   const displayMaterial = selectedMaterial?.code ?? "Sin material";
-  const displayLot = lotNumber.trim() || "Sin lote";
-  const lotSummary = `${palets.length} ${palets.length === 1 ? "palet" : "palets"}, ${totalBatches} ${
-    totalBatches === 1 ? "batch" : "batches"
-  }`;
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -611,154 +657,266 @@ function ConfirmStep({
           Trazabilidad
         </div>
 
-        <div className="mt-4 rounded-md border border-border/70 bg-card/60 px-4 py-3">
-          <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            <FileText className="h-3.5 w-3.5 text-[#A8B1FF]" />
-            Lote
-          </div>
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="font-mono text-[15px] font-semibold text-foreground">
-              {displayLot}
-            </span>
-            <span className="text-[12.5px] text-muted-foreground">({lotSummary})</span>
-          </div>
-
-          {palets.length === 0 ? (
-            <div className="mt-4 rounded-md border border-dashed border-border/80 bg-background/30 px-3 py-2 text-[12.5px] text-muted-foreground">
-              Sin palets registrados.
-            </div>
-          ) : (
-            <div className="mt-4 space-y-4 border-l border-border/80 pl-4">
-              {palets.map((palet) => (
-                <div key={palet.id}>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
-                    <span className="font-mono text-[13.5px] font-semibold text-foreground">
-                      Palet {palet.code}
-                    </span>
-                    <span className="text-[12px] text-muted-foreground">
-                      {palet.batches.length} batches
-                    </span>
-                  </div>
-
-                  {palet.batches.length === 0 ? (
-                    <div className="mt-2 text-[12.5px] text-muted-foreground">
-                      Sin batches registrados.
-                    </div>
-                  ) : (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {palet.batches.map((batch) => (
-                        <span
-                          key={`${palet.id}-${batch}`}
-                          className="flex h-7 min-w-8 items-center justify-center rounded-md border border-border/80 bg-background/45 px-2 font-mono text-[12px] text-foreground"
-                        >
-                          {batch}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <TraceabilitySummary lots={lots} />
       </section>
     </div>
   );
 }
 
-function BandTraceabilityForm({
-  selectedMaterial,
-  lotNumber,
-  newPaletCode,
-  palets,
-  onLotNumberChange,
-  onNewPaletCodeChange,
+function LotTraceabilityForm({
+  lots,
+  onAddLot,
+  onRemoveLot,
+  onToggleLot,
   onAddPalet,
   onRemovePalet,
   onTogglePalet,
   onAddBatchRange,
 }: {
-  selectedMaterial?: Material;
-  lotNumber: string;
-  newPaletCode: string;
-  palets: TracePalet[];
-  onLotNumberChange: (value: string) => void;
-  onNewPaletCodeChange: (value: string) => void;
-  onAddPalet: () => void;
+  lots: TraceLot[];
+  onAddLot: (value: string) => boolean;
+  onRemoveLot: (lotId: string) => void;
+  onToggleLot: (lotId: string) => void;
+  onAddPalet: (lotId: string, value: string) => boolean;
+  onRemovePalet: (lotId: string, paletId: string) => void;
+  onTogglePalet: (lotId: string, paletId: string) => void;
+  onAddBatchRange: (lotId: string, paletId: string, from: string, to: string) => boolean;
+}) {
+  const [newLotCode, setNewLotCode] = useState("");
+
+  const addLot = () => {
+    const wasAdded = onAddLot(newLotCode);
+    if (!wasAdded) return;
+
+    setNewLotCode("");
+  };
+
+  return (
+    <section className="space-y-5">
+      <div className="min-w-0">
+        <div className="text-[19px] font-semibold tracking-tight text-foreground sm:text-[21px]">
+          Lotes del Remito
+        </div>
+        <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
+          Cargá cada lote con sus palets y batches correspondientes.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {lots.map((lot) => (
+          <LotTraceCard
+            key={lot.id}
+            lot={lot}
+            onRemove={() => onRemoveLot(lot.id)}
+            onToggle={() => onToggleLot(lot.id)}
+            onAddPalet={(value) => onAddPalet(lot.id, value)}
+            onRemovePalet={(paletId) => onRemovePalet(lot.id, paletId)}
+            onTogglePalet={(paletId) => onTogglePalet(lot.id, paletId)}
+            onAddBatchRange={(paletId, from, to) => onAddBatchRange(lot.id, paletId, from, to)}
+          />
+        ))}
+
+        <div className="rounded-lg border border-border/80 bg-background/35 p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+            Agregar lote
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+            <Input
+              placeholder="N° lote (ej. 24)"
+              value={newLotCode}
+              onChange={(event) => setNewLotCode(event.target.value)}
+              autoComplete="off"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addLot();
+                }
+              }}
+              className="reception-field h-10 font-mono text-[13px]"
+            />
+            <Button
+              type="button"
+              className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
+              onClick={addLot}
+              disabled={!newLotCode.trim()}
+            >
+              <Plus className="h-4 w-4" />
+              Lote
+            </Button>
+          </div>
+        </div>
+
+        {lots.length === 0 ? (
+          <EmptyTraceState
+            icon={FileText}
+            title="Sin lotes"
+            message="Agregá el primer lote para cargar sus palets y batches."
+            className="py-6"
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function AddPaletPanel({
+  value,
+  onValueChange,
+  onAdd,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  onAdd: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-border/80 bg-background/35 p-4">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+        Agregar palet a este lote
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+        <Input
+          placeholder="N° palet (ej. P-01)"
+          value={value}
+          onChange={(event) => onValueChange(event.target.value)}
+          autoComplete="off"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onAdd();
+            }
+          }}
+          className="reception-field h-10 font-mono text-[13px]"
+        />
+        <Button
+          type="button"
+          className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
+          onClick={onAdd}
+          disabled={!value.trim()}
+        >
+          <Plus className="h-4 w-4" />
+          Palet
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function LotTraceCard({
+  lot,
+  onRemove,
+  onToggle,
+  onAddPalet,
+  onRemovePalet,
+  onTogglePalet,
+  onAddBatchRange,
+}: {
+  lot: TraceLot;
+  onRemove: () => void;
+  onToggle: () => void;
+  onAddPalet: (value: string) => boolean;
   onRemovePalet: (paletId: string) => void;
   onTogglePalet: (paletId: string) => void;
   onAddBatchRange: (paletId: string, from: string, to: string) => boolean;
 }) {
-  return (
-    <>
-      <FieldBlock id="lote" label="N° de lote" required>
-        <Input
-          id="lote"
-          value={lotNumber}
-          onChange={(event) => onLotNumberChange(event.target.value)}
-          placeholder="Ej: L-25-2323"
-          autoComplete="off"
-          className="reception-field h-11 max-w-sm font-mono text-[13.5px]"
-        />
-      </FieldBlock>
+  const [newPaletCode, setNewPaletCode] = useState("");
+  const batchCount = getLotBatchCount(lot);
 
-      <div className="rounded-lg border border-border/80 bg-background/30 p-4">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          Agregar palet
-        </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_180px]">
-          <Input
-            placeholder="Ej: P-03"
-            value={newPaletCode}
-            onChange={(event) => onNewPaletCodeChange(event.target.value)}
-            autoComplete="off"
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                onAddPalet();
-              }
-            }}
-            className="reception-field h-10 font-mono text-[13px]"
-          />
+  const addPalet = () => {
+    const wasAdded = onAddPalet(newPaletCode);
+    if (!wasAdded) return;
+
+    setNewPaletCode("");
+  };
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/80 bg-background/30">
+      <div
+        className={cn(
+          "grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5",
+          lot.expanded && "border-b border-border/70",
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-3">
           <Button
             type="button"
-            className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
-            onClick={onAddPalet}
+            variant="ghost"
+            size="icon"
+            className="-ml-2 h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={onToggle}
+            title={lot.expanded ? "Contraer lote" : "Expandir lote"}
           >
-            <Plus className="h-4 w-4" />
-            Agregar palet
+            <ChevronDown
+              className={cn("h-4 w-4 transition-transform", lot.expanded && "rotate-180")}
+            />
+          </Button>
+          <FileText className="h-4 w-4 shrink-0 text-[#A8B1FF]" />
+          <span className="min-w-0 truncate font-mono text-[13.5px] font-semibold text-foreground">
+            Lote {lot.code}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 pl-10 sm:pl-0">
+          <TraceCountSummary palets={lot.palets.length} batches={batchCount} />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={onRemove}
+            title="Eliminar lote"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
       </div>
 
-      {palets.length === 0 ? (
-        <EmptyTraceState message="Todavía no hay palets registrados para este lote." />
-      ) : (
-        palets.map((palet) => (
-          <PaletTraceCard
-            key={palet.id}
-            palet={palet}
-            selectedMaterial={selectedMaterial}
-            onRemove={() => onRemovePalet(palet.id)}
-            onToggle={() => onTogglePalet(palet.id)}
-            onAddBatchRange={(from, to) => onAddBatchRange(palet.id, from, to)}
-          />
-        ))
+      {lot.expanded && (
+        <div className="space-y-4 px-4 py-4 sm:px-5">
+          {lot.palets.length === 0 ? (
+            <>
+              <AddPaletPanel
+                value={newPaletCode}
+                onValueChange={setNewPaletCode}
+                onAdd={addPalet}
+              />
+              <EmptyTraceState
+                icon={Layers3}
+                title="Sin palets"
+                message="Agregá un palet para cargar el rango de batches."
+                className="py-6"
+              />
+            </>
+          ) : (
+            <>
+              {lot.palets.map((palet) => (
+                <PaletTraceCard
+                  key={palet.id}
+                  palet={palet}
+                  onRemove={() => onRemovePalet(palet.id)}
+                  onToggle={() => onTogglePalet(palet.id)}
+                  onAddBatchRange={(from, to) => onAddBatchRange(palet.id, from, to)}
+                />
+              ))}
+              <AddPaletPanel
+                value={newPaletCode}
+                onValueChange={setNewPaletCode}
+                onAdd={addPalet}
+              />
+            </>
+          )}
+        </div>
       )}
-    </>
+    </div>
   );
 }
 
 function PaletTraceCard({
   palet,
-  selectedMaterial,
   onRemove,
   onToggle,
   onAddBatchRange,
 }: {
   palet: TracePalet;
-  selectedMaterial?: Material;
   onRemove: () => void;
   onToggle: () => void;
   onAddBatchRange: (from: string, to: string) => boolean;
@@ -776,7 +934,12 @@ function PaletTraceCard({
 
   return (
     <div className="overflow-hidden rounded-lg border border-border/80 bg-card/70">
-      <div className="flex items-center gap-3 border-b border-border/70 px-4 py-3">
+      <div
+        className={cn(
+          "flex items-center gap-3 px-4 py-3",
+          palet.expanded && "border-b border-border/70",
+        )}
+      >
         <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -784,11 +947,8 @@ function PaletTraceCard({
               Palet {palet.code}
             </span>
             <span className="text-[12px] text-muted-foreground">
-              {palet.batches.length} batches
+              ({palet.batches.length} batches)
             </span>
-          </div>
-          <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-            {selectedMaterial ? selectedMaterial.code : "Sin material seleccionado"}
           </div>
         </div>
         <div className="ml-auto flex items-center gap-1">
@@ -852,7 +1012,7 @@ function PaletTraceCard({
               onClick={addRange}
             >
               <Plus className="h-4 w-4" />
-              Agregar rango
+              Agregar
             </Button>
           </div>
 
@@ -878,12 +1038,139 @@ function PaletTraceCard({
   );
 }
 
-function EmptyTraceState({ message }: { message: string }) {
+function TraceCountSummary({ palets, batches }: { palets: number; batches: number }) {
   return (
-    <div className="rounded-lg border border-dashed border-border/80 bg-background/25 px-4 py-8 text-center">
-      <Layers3 className="mx-auto h-5 w-5 text-[#A8B1FF]" />
-      <div className="mt-3 text-[13px] font-medium text-foreground">Carga desde cero</div>
-      <p className="mt-1 text-[12.5px] text-muted-foreground">{message}</p>
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted-foreground sm:justify-end">
+      <span>
+        <strong className="font-semibold text-foreground">{palets}</strong>{" "}
+        {pluralize(palets, "palet", "palets")}
+      </span>
+      <span className="text-muted-foreground/60">·</span>
+      <span>
+        <strong className="font-semibold text-foreground">{batches}</strong> batches
+      </span>
+    </div>
+  );
+}
+
+function EmptyTraceState({
+  icon: Icon = Layers3,
+  title,
+  message,
+  className,
+  onClick,
+}: {
+  icon?: ComponentType<{ className?: string }>;
+  title: string;
+  message: string;
+  className?: string;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <Icon className="mx-auto h-7 w-7 text-[#A8B1FF]" />
+      <div className="mt-4 text-[14px] font-semibold text-foreground">{title}</div>
+      <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{message}</p>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={cn(
+          "w-full rounded-lg border border-dashed border-border/80 bg-background/25 px-4 py-12 text-center transition-colors hover:border-[#A8B1FF]/60 hover:bg-[#5E6AD2]/10",
+          className,
+        )}
+        onClick={onClick}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border border-dashed border-border/80 bg-background/25 px-4 py-8 text-center",
+        className,
+      )}
+    >
+      {content}
+    </div>
+  );
+}
+
+function TraceabilitySummary({ lots }: { lots: TraceLot[] }) {
+  if (lots.length === 0) {
+    return (
+      <div className="mt-4 rounded-md border border-dashed border-border/80 bg-background/30 px-3 py-3 text-[12.5px] text-muted-foreground">
+        Sin lotes registrados.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-3">
+      {lots.map((lot) => {
+        const batchCount = getLotBatchCount(lot);
+
+        return (
+          <div key={lot.id} className="rounded-md border border-border/70 bg-card/60 px-4 py-3">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <FileText className="h-3.5 w-3.5 shrink-0 text-[#A8B1FF]" />
+                <span className="font-mono text-[16px] font-semibold text-foreground">
+                  Lote {formatLotCode(lot)}
+                </span>
+              </div>
+              <span className="text-[12.5px] text-muted-foreground">
+                ({lot.palets.length} {pluralize(lot.palets.length, "palet", "palets")}, {batchCount}{" "}
+                batches)
+              </span>
+            </div>
+
+            {lot.palets.length === 0 ? (
+              <div className="mt-4 rounded-md border border-dashed border-border/80 bg-background/30 px-3 py-2 text-[12.5px] text-muted-foreground">
+                Sin palets registrados.
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4 border-l border-border/80 pl-4">
+                {lot.palets.map((palet) => (
+                  <div key={palet.id}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
+                      <span className="font-mono text-[13.5px] font-semibold text-foreground">
+                        Palet {palet.code}
+                      </span>
+                      <span className="text-[12px] text-muted-foreground">
+                        ({palet.batches.length} batches)
+                      </span>
+                    </div>
+
+                    {palet.batches.length === 0 ? (
+                      <div className="mt-2 text-[12.5px] text-muted-foreground">
+                        Sin batches registrados.
+                      </div>
+                    ) : (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {palet.batches.map((batch) => (
+                          <span
+                            key={`${palet.id}-${batch}`}
+                            className="flex h-7 min-w-8 items-center justify-center rounded-md border border-border/80 bg-background/45 px-2 font-mono text-[12px] text-foreground"
+                          >
+                            {batch}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -892,19 +1179,17 @@ function LiveTraceabilityPanel({
   selectedMaterial,
   remito,
   provider,
-  lotNumber,
-  palets,
+  lots,
 }: {
   selectedMaterial?: Material;
   remito: string;
   provider: string;
-  lotNumber: string;
-  palets: TracePalet[];
+  lots: TraceLot[];
 }) {
-  const totalBatches = palets.reduce((total, palet) => total + palet.batches.length, 0);
+  const totalBatches = getTotalBatches(lots);
+  const totalPalets = getTotalPalets(lots);
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
-  const displayLot = lotNumber.trim() || "Sin lote";
 
   return (
     <aside className="min-w-0">
@@ -921,46 +1206,56 @@ function LiveTraceabilityPanel({
       <div className="rounded-lg border border-border/80 bg-background/35 p-4">
         <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
           <Boxes className="h-4 w-4 text-[#A8B1FF]" />
-          {selectedMaterial?.code ?? "Sin material seleccionado"}
+          {selectedMaterial?.code
+            ? `Recepción Material ${selectedMaterial.code}`
+            : "Recepción Material"}
         </div>
 
         <div className="mt-4 border-t border-border/70 pt-4">
-          <div className="space-y-3">
-            <div className="flex items-start gap-2">
-              <FileText className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
-              <div>
-                <div className="font-mono text-[13px] font-semibold text-foreground">
-                  Lote {displayLot}
-                </div>
-                {palets.length === 0 ? (
-                  <div className="mt-2 text-[12px] text-muted-foreground">
-                    Sin palets registrados
-                  </div>
-                ) : (
-                  <div className="mt-2 space-y-2 border-l border-border/80 pl-4">
-                    {palets.map((palet) => (
-                      <div key={palet.id} className="flex items-start gap-2">
-                        <Layers3 className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
-                        <div>
-                          <div className="font-mono text-[13px] font-semibold text-foreground">
-                            Palet {palet.code}
+          {lots.length === 0 ? (
+            <div className="text-[12px] text-muted-foreground">Sin lotes registrados</div>
+          ) : (
+            <div className="space-y-3">
+              {lots.map((lot) => (
+                <div key={lot.id} className="flex items-start gap-2">
+                  <FileText className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
+                  <div className="min-w-0">
+                    <div className="font-mono text-[13px] font-semibold text-foreground">
+                      Lote {formatLotCode(lot)}
+                    </div>
+                    <div className="mt-0.5 text-[12px] text-muted-foreground">
+                      {lot.palets.length} {pluralize(lot.palets.length, "palet", "palets")} ·{" "}
+                      {getLotBatchCount(lot)} batches
+                    </div>
+
+                    {lot.palets.length > 0 ? (
+                      <div className="mt-2 space-y-2 border-l border-border/80 pl-4">
+                        {lot.palets.map((palet) => (
+                          <div key={palet.id} className="flex items-start gap-2">
+                            <Layers3 className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
+                            <div>
+                              <div className="font-mono text-[13px] font-semibold text-foreground">
+                                Palet {palet.code}
+                              </div>
+                              <div className="mt-0.5 text-[12px] text-muted-foreground">
+                                ({palet.batches.length} batches)
+                              </div>
+                            </div>
                           </div>
-                          <div className="mt-0.5 text-[12px] text-muted-foreground">
-                            {palet.batches.length} batches
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : null}
                   </div>
-                )}
-              </div>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <LiveMetric label="Palets" value={String(palets.length)} />
+      <div className="mt-4 grid grid-cols-3 gap-3">
+        <LiveMetric label="Lotes" value={String(lots.length)} />
+        <LiveMetric label="Palets" value={String(totalPalets)} />
         <LiveMetric label="Batches" value={String(totalBatches)} />
       </div>
     </aside>
@@ -981,9 +1276,7 @@ function LiveContext({
   return (
     <div className="flex items-center gap-2 rounded-md border border-border/70 bg-card/60 px-3 py-2">
       <Icon className="h-3.5 w-3.5 text-[#A8B1FF]" />
-      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        {label}
-      </span>
+      <span className="text-[15px] font-semibold text-foreground">{label}</span>
       <span className={cn("ml-auto truncate text-[12.5px] text-foreground", mono && "font-mono")}>
         {value}
       </span>
@@ -1025,6 +1318,26 @@ function createBatchRange(from: string, to: string) {
 
 function mergeBatches(current: string[], next: string[]) {
   return Array.from(new Set([...current, ...next])).sort((a, b) => Number(a) - Number(b));
+}
+
+function getLotBatchCount(lot: TraceLot) {
+  return lot.palets.reduce((total, palet) => total + palet.batches.length, 0);
+}
+
+function getTotalPalets(lots: TraceLot[]) {
+  return lots.reduce((total, lot) => total + lot.palets.length, 0);
+}
+
+function getTotalBatches(lots: TraceLot[]) {
+  return lots.reduce((total, lot) => total + getLotBatchCount(lot), 0);
+}
+
+function formatLotCode(lot: TraceLot) {
+  return lot.code.trim() || "Sin número";
+}
+
+function pluralize(count: number, singular: string, plural: string) {
+  return count === 1 ? singular : plural;
 }
 
 function materialLabel(material: (typeof materials)[number]) {
