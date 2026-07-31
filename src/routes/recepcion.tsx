@@ -8,7 +8,6 @@ import {
   ChevronRight,
   ClipboardList,
   FileText,
-  Info,
   Layers3,
   Plus,
   ScanLine,
@@ -90,9 +89,8 @@ function ReceptionRoute() {
   const receptionProvider = getReceiptProviderLabel(receiptMaterials);
   const isAwaitingEntryAuth = !isConfirmed && !isEntryUnlocked;
   const canContinue =
-    (activeStep === 1 && Boolean(remito.trim() && receptionDate)) ||
-    (activeStep === 2 && receiptMaterials.length > 0) ||
-    activeStep === 3;
+    (activeStep === 1 && Boolean(remito.trim() && receptionDate && receiptMaterials.length > 0)) ||
+    activeStep > 1;
 
   const addReceiptMaterial = (materialCode: string) => {
     const material = materials.find((item) => item.code === materialCode);
@@ -314,6 +312,9 @@ function ReceptionRoute() {
 
     if (activeStep === 1) {
       setRemito(remito.trim());
+      setReceiptMaterials((current) =>
+        current.map((entry, index) => ({ ...entry, expanded: index === 0 })),
+      );
     }
 
     if (activeStep < 3) {
@@ -345,8 +346,7 @@ function ReceptionRoute() {
                 <p className="mt-1 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
                   {isConfirmed
                     ? "Los materiales quedan pendientes de aprobación de Calidad."
-                    : activeStep === 1 &&
-                      "Cargá remito y fecha; después agregás los materiales incluidos."}
+                    : activeStep === 1 && "Cargá remito, fecha y materiales incluidos."}
                   {!isConfirmed &&
                     activeStep === 2 &&
                     "Agregá materiales y cargá la trazabilidad de cada uno."}
@@ -405,8 +405,11 @@ function ReceptionRoute() {
                     <ReceptionDetailsStep
                       remito={remito}
                       receptionDate={receptionDate}
+                      receiptMaterials={receiptMaterials}
                       onRemitoChange={setRemito}
                       onReceptionDateChange={setReceptionDate}
+                      onAddReceiptMaterial={addReceiptMaterial}
+                      onRemoveReceiptMaterial={removeReceiptMaterial}
                     />
                   )}
                   {activeStep === 2 && (
@@ -414,8 +417,6 @@ function ReceptionRoute() {
                       remito={remito}
                       provider={receptionProvider}
                       receiptMaterials={receiptMaterials}
-                      onAddReceiptMaterial={addReceiptMaterial}
-                      onRemoveReceiptMaterial={removeReceiptMaterial}
                       onToggleReceiptMaterial={toggleReceiptMaterial}
                       onAddLot={addLot}
                       onRemoveLot={removeLot}
@@ -487,16 +488,31 @@ function ReceptionRoute() {
 function ReceptionDetailsStep({
   remito,
   receptionDate,
+  receiptMaterials,
   onRemitoChange,
   onReceptionDateChange,
+  onAddReceiptMaterial,
+  onRemoveReceiptMaterial,
 }: {
   remito: string;
   receptionDate: string;
+  receiptMaterials: ReceiptMaterial[];
   onRemitoChange: (value: string) => void;
   onReceptionDateChange: (value: string) => void;
+  onAddReceiptMaterial: (materialCode: string) => boolean;
+  onRemoveReceiptMaterial: (receiptMaterialId: string) => void;
 }) {
   return (
     <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-2">
+      <div className="min-w-0 md:col-span-2">
+        <div className="text-[19px] font-semibold tracking-tight text-foreground sm:text-[21px]">
+          Datos del Remito
+        </div>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+          Agregá el número de remito y su fecha de recepción correspondiente.
+        </p>
+      </div>
+
       <FieldBlock id="remito" label="N° de remito" required>
         <Input
           id="remito"
@@ -521,26 +537,11 @@ function ReceptionDetailsStep({
         />
       </FieldBlock>
 
-      <div className="rounded-lg border border-[#5E6AD2]/45 bg-[#5E6AD2]/10 p-5 md:col-span-2">
-        <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground">
-          <Info className="h-4 w-4 text-[#A8B1FF]" />
-          Materiales del remito
-        </div>
-        <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">
-          En el próximo paso vas a agregar uno o más materiales del remito y cargar la trazabilidad
-          de cada uno.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {["Material", "Lote", "Palet", "Batch"].map((level, index, levels) => (
-            <div key={level} className="flex items-center gap-2">
-              <span className="rounded-md border border-[#5E6AD2]/55 bg-background/50 px-3 py-1.5 text-[13px] font-semibold text-foreground">
-                {level}
-              </span>
-              {index < levels.length - 1 && <ChevronRight className="h-4 w-4 text-[#A8B1FF]" />}
-            </div>
-          ))}
-        </div>
-      </div>
+      <MaterialsSelectionForm
+        receiptMaterials={receiptMaterials}
+        onAddReceiptMaterial={onAddReceiptMaterial}
+        onRemoveReceiptMaterial={onRemoveReceiptMaterial}
+      />
     </div>
   );
 }
@@ -549,8 +550,6 @@ function TraceabilityStep({
   remito,
   provider,
   receiptMaterials,
-  onAddReceiptMaterial,
-  onRemoveReceiptMaterial,
   onToggleReceiptMaterial,
   onAddLot,
   onRemoveLot,
@@ -563,8 +562,6 @@ function TraceabilityStep({
   remito: string;
   provider: string;
   receiptMaterials: ReceiptMaterial[];
-  onAddReceiptMaterial: (materialCode: string) => boolean;
-  onRemoveReceiptMaterial: (receiptMaterialId: string) => void;
   onToggleReceiptMaterial: (receiptMaterialId: string) => void;
   onAddLot: (receiptMaterialId: string, value: string) => boolean;
   onRemoveLot: (receiptMaterialId: string, lotId: string) => void;
@@ -585,8 +582,6 @@ function TraceabilityStep({
       <div className="min-w-0 space-y-5">
         <MaterialsTraceabilityForm
           receiptMaterials={receiptMaterials}
-          onAddReceiptMaterial={onAddReceiptMaterial}
-          onRemoveReceiptMaterial={onRemoveReceiptMaterial}
           onToggleReceiptMaterial={onToggleReceiptMaterial}
           onAddLot={onAddLot}
           onRemoveLot={onRemoveLot}
@@ -725,36 +720,14 @@ function ConfirmStep({
   );
 }
 
-function MaterialsTraceabilityForm({
+function MaterialsSelectionForm({
   receiptMaterials,
   onAddReceiptMaterial,
   onRemoveReceiptMaterial,
-  onToggleReceiptMaterial,
-  onAddLot,
-  onRemoveLot,
-  onToggleLot,
-  onAddPalet,
-  onRemovePalet,
-  onTogglePalet,
-  onAddBatchRange,
 }: {
   receiptMaterials: ReceiptMaterial[];
   onAddReceiptMaterial: (materialCode: string) => boolean;
   onRemoveReceiptMaterial: (receiptMaterialId: string) => void;
-  onToggleReceiptMaterial: (receiptMaterialId: string) => void;
-  onAddLot: (receiptMaterialId: string, value: string) => boolean;
-  onRemoveLot: (receiptMaterialId: string, lotId: string) => void;
-  onToggleLot: (receiptMaterialId: string, lotId: string) => void;
-  onAddPalet: (receiptMaterialId: string, lotId: string, value: string) => boolean;
-  onRemovePalet: (receiptMaterialId: string, lotId: string, paletId: string) => void;
-  onTogglePalet: (receiptMaterialId: string, lotId: string, paletId: string) => void;
-  onAddBatchRange: (
-    receiptMaterialId: string,
-    lotId: string,
-    paletId: string,
-    from: string,
-    to: string,
-  ) => boolean;
 }) {
   const [newMaterialCode, setNewMaterialCode] = useState("");
   const availableMaterials = materials.filter(
@@ -770,13 +743,170 @@ function MaterialsTraceabilityForm({
   };
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-4 md:col-span-2">
       <div className="min-w-0">
         <div className="text-[19px] font-semibold tracking-tight text-foreground sm:text-[21px]">
           Materiales del Remito
         </div>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+          Agregá los materiales incluido en este remito. En el próximo paso vas a cargar los datos
+          de cada uno.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-border/80 bg-background/35 p-4">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+          Agregar material
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+          <Select
+            value={newMaterialCode}
+            onValueChange={setNewMaterialCode}
+            disabled={availableMaterials.length === 0}
+          >
+            <SelectTrigger className="reception-select-trigger h-10 text-left text-[13px] data-[placeholder]:text-muted-foreground">
+              <SelectValue
+                placeholder={
+                  availableMaterials.length === 0
+                    ? "Todos los materiales agregados"
+                    : "Seleccionar material"
+                }
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {availableMaterials.map((material) => (
+                <SelectItem
+                  key={material.code}
+                  value={material.code}
+                  textValue={materialLabel(material)}
+                >
+                  {materialLabel(material)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
+            onClick={addMaterial}
+            disabled={!canAddMaterial}
+          >
+            <Plus className="h-4 w-4" />
+            Material
+          </Button>
+        </div>
+      </div>
+
+      {receiptMaterials.length === 0 ? (
+        <EmptyTraceState
+          icon={Boxes}
+          title="Sin materiales"
+          message="Agregá el primer material del remito para continuar."
+          className="py-6"
+        />
+      ) : (
+        <div className="space-y-2">
+          {receiptMaterials.map((receiptMaterial) => (
+            <MaterialSelectionRow
+              key={receiptMaterial.id}
+              receiptMaterial={receiptMaterial}
+              onRemove={() => onRemoveReceiptMaterial(receiptMaterial.id)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function MaterialSelectionRow({
+  receiptMaterial,
+  onRemove,
+}: {
+  receiptMaterial: ReceiptMaterial;
+  onRemove: () => void;
+}) {
+  const material = getMaterialByCode(receiptMaterial.materialCode);
+
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-lg border border-border/80 bg-card/60 px-4 py-3">
+      <Boxes className="mt-0.5 h-4 w-4 shrink-0 text-[#A8B1FF]" />
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="truncate text-[15px] font-semibold text-foreground">
+            Recepción Material {receiptMaterial.materialCode}
+          </div>
+          {material ? (
+            <div className="flex flex-wrap items-center gap-1.5 sm:ml-5">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                Trazabilidad requerida
+              </span>
+              {material.traceability.map((level, index) => (
+                <div key={level} className="flex items-center gap-1.5">
+                  <span className="rounded-md border border-[#5E6AD2]/45 bg-background/45 px-2 py-1 text-[12px] font-semibold text-foreground">
+                    {level}
+                  </span>
+                  {index < material.traceability.length - 1 ? (
+                    <ChevronRight className="h-3.5 w-3.5 text-[#A8B1FF]" />
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
+          {material?.provider ?? "Sin proveedor"}
+        </div>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+        onClick={onRemove}
+        title="Eliminar material"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+}
+
+function MaterialsTraceabilityForm({
+  receiptMaterials,
+  onToggleReceiptMaterial,
+  onAddLot,
+  onRemoveLot,
+  onToggleLot,
+  onAddPalet,
+  onRemovePalet,
+  onTogglePalet,
+  onAddBatchRange,
+}: {
+  receiptMaterials: ReceiptMaterial[];
+  onToggleReceiptMaterial: (receiptMaterialId: string) => void;
+  onAddLot: (receiptMaterialId: string, value: string) => boolean;
+  onRemoveLot: (receiptMaterialId: string, lotId: string) => void;
+  onToggleLot: (receiptMaterialId: string, lotId: string) => void;
+  onAddPalet: (receiptMaterialId: string, lotId: string, value: string) => boolean;
+  onRemovePalet: (receiptMaterialId: string, lotId: string, paletId: string) => void;
+  onTogglePalet: (receiptMaterialId: string, lotId: string, paletId: string) => void;
+  onAddBatchRange: (
+    receiptMaterialId: string,
+    lotId: string,
+    paletId: string,
+    from: string,
+    to: string,
+  ) => boolean;
+}) {
+  return (
+    <section className="space-y-5">
+      <div className="min-w-0">
+        <div className="text-[19px] font-semibold tracking-tight text-foreground sm:text-[21px]">
+          Trazabilidad por Material
+        </div>
         <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
-          Agregá cada material con sus lotes, palets y batches correspondientes.
+          Completá los lotes, palets y batches correspondientes para cada material del remito.
         </p>
       </div>
 
@@ -785,7 +915,6 @@ function MaterialsTraceabilityForm({
           <ReceiptMaterialTraceCard
             key={receiptMaterial.id}
             receiptMaterial={receiptMaterial}
-            onRemove={() => onRemoveReceiptMaterial(receiptMaterial.id)}
             onToggle={() => onToggleReceiptMaterial(receiptMaterial.id)}
             onAddLot={(value) => onAddLot(receiptMaterial.id, value)}
             onRemoveLot={(lotId) => onRemoveLot(receiptMaterial.id, lotId)}
@@ -799,54 +928,11 @@ function MaterialsTraceabilityForm({
           />
         ))}
 
-        <div className="rounded-lg border border-border/80 bg-background/35 p-4">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-            Agregar material
-          </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
-            <Select
-              value={newMaterialCode}
-              onValueChange={setNewMaterialCode}
-              disabled={availableMaterials.length === 0}
-            >
-              <SelectTrigger className="reception-select-trigger h-10 text-left text-[13px] data-[placeholder]:text-muted-foreground">
-                <SelectValue
-                  placeholder={
-                    availableMaterials.length === 0
-                      ? "Todos los materiales agregados"
-                      : "Seleccionar material"
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {availableMaterials.map((material) => (
-                  <SelectItem
-                    key={material.code}
-                    value={material.code}
-                    textValue={materialLabel(material)}
-                  >
-                    {materialLabel(material)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
-              onClick={addMaterial}
-              disabled={!canAddMaterial}
-            >
-              <Plus className="h-4 w-4" />
-              Material
-            </Button>
-          </div>
-        </div>
-
         {receiptMaterials.length === 0 ? (
           <EmptyTraceState
             icon={Boxes}
             title="Sin materiales"
-            message="Agregá el primer material del remito para cargar sus lotes."
+            message="Volvé al paso anterior para agregar los materiales del remito."
             className="py-6"
           />
         ) : null}
@@ -868,7 +954,7 @@ function ReceiptMaterialTraceCard({
   onAddBatchRange,
 }: {
   receiptMaterial: ReceiptMaterial;
-  onRemove: () => void;
+  onRemove?: () => void;
   onToggle: () => void;
   onAddLot: (value: string) => boolean;
   onRemoveLot: (lotId: string) => void;
@@ -923,16 +1009,18 @@ function ReceiptMaterialTraceCard({
             palets={totalPalets}
             batches={totalBatches}
           />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-            onClick={onRemove}
-            title="Eliminar material"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          {onRemove ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+              onClick={onRemove}
+              title="Eliminar material"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
         </div>
       </div>
 
