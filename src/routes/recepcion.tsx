@@ -73,125 +73,224 @@ type TraceLot = {
   expanded: boolean;
 };
 
+type ReceiptMaterial = {
+  id: string;
+  materialCode: string;
+  lots: TraceLot[];
+  expanded: boolean;
+};
+
 function ReceptionRoute() {
   const [activeStep, setActiveStep] = useState(1);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [isEntryUnlocked, setIsEntryUnlocked] = useState(false);
   const [remito, setRemito] = useState("");
   const [receptionDate, setReceptionDate] = useState("");
-  const [selectedMaterialCode, setSelectedMaterialCode] = useState("");
-  const [traceLots, setTraceLots] = useState<TraceLot[]>([]);
-  const selectedMaterial = materials.find((material) => material.code === selectedMaterialCode);
-  const receptionProvider = selectedMaterial?.provider ?? "";
+  const [receiptMaterials, setReceiptMaterials] = useState<ReceiptMaterial[]>([]);
+  const receptionProvider = getReceiptProviderLabel(receiptMaterials);
   const isAwaitingEntryAuth = !isConfirmed && !isEntryUnlocked;
   const canContinue =
-    (activeStep === 1 && Boolean(remito.trim() && receptionDate && selectedMaterial)) ||
-    activeStep > 1;
-  const handleMaterialChange = (value: string) => {
-    setSelectedMaterialCode(value);
-    setTraceLots([]);
-  };
+    (activeStep === 1 && Boolean(remito.trim() && receptionDate)) ||
+    (activeStep === 2 && receiptMaterials.length > 0) ||
+    activeStep === 3;
 
-  const addLot = (value: string) => {
-    const code = normalizeTraceCode(value);
-    if (!code) return false;
+  const addReceiptMaterial = (materialCode: string) => {
+    const material = materials.find((item) => item.code === materialCode);
+    if (!material) return false;
 
-    if (traceLots.some((lot) => lot.code.toLowerCase() === code.toLowerCase())) {
+    if (receiptMaterials.some((entry) => entry.materialCode === material.code)) {
       return false;
     }
 
-    setTraceLots((current) => [
-      ...current.map((lot) => ({ ...lot, expanded: false })),
+    setReceiptMaterials((current) => [
+      ...current.map((entry) => ({ ...entry, expanded: false })),
       {
-        id: `lot-${code}-${Date.now()}`,
-        code,
-        palets: [],
+        id: `material-${material.code}-${Date.now()}`,
+        materialCode: material.code,
+        lots: [],
         expanded: true,
       },
     ]);
     return true;
   };
 
-  const removeLot = (lotId: string) => {
-    setTraceLots((current) => current.filter((lot) => lot.id !== lotId));
+  const removeReceiptMaterial = (receiptMaterialId: string) => {
+    setReceiptMaterials((current) => current.filter((entry) => entry.id !== receiptMaterialId));
   };
 
-  const toggleLot = (lotId: string) => {
-    setTraceLots((current) =>
-      current.map((lot) => (lot.id === lotId ? { ...lot, expanded: !lot.expanded } : lot)),
+  const toggleReceiptMaterial = (receiptMaterialId: string) => {
+    setReceiptMaterials((current) =>
+      current.map((entry) =>
+        entry.id === receiptMaterialId ? { ...entry, expanded: !entry.expanded } : entry,
+      ),
     );
   };
 
-  const addPalet = (lotId: string, value: string) => {
+  const addLot = (receiptMaterialId: string, value: string) => {
     const code = normalizeTraceCode(value);
     if (!code) return false;
 
-    setTraceLots((current) =>
-      current.map((lot) => {
-        if (lot.id !== lotId) return lot;
+    const receiptMaterial = receiptMaterials.find((entry) => entry.id === receiptMaterialId);
+    if (!receiptMaterial) return false;
 
-        if (lot.palets.some((palet) => palet.code.toLowerCase() === code.toLowerCase())) {
-          return lot;
-        }
+    if (receiptMaterial.lots.some((lot) => lot.code.toLowerCase() === code.toLowerCase())) {
+      return false;
+    }
 
-        return {
-          ...lot,
-          palets: [
-            ...lot.palets.map((palet) => ({ ...palet, expanded: false })),
-            {
-              id: `palet-${code}-${Date.now()}`,
-              code,
-              batches: [],
-              expanded: true,
-            },
-          ],
-        };
-      }),
+    setReceiptMaterials((current) =>
+      current.map((entry) =>
+        entry.id === receiptMaterialId
+          ? {
+              ...entry,
+              lots: [
+                ...entry.lots.map((lot) => ({ ...lot, expanded: false })),
+                {
+                  id: `lot-${code}-${Date.now()}`,
+                  code,
+                  palets: [],
+                  expanded: true,
+                },
+              ],
+            }
+          : entry,
+      ),
     );
     return true;
   };
 
-  const removePalet = (lotId: string, paletId: string) => {
-    setTraceLots((current) =>
-      current.map((lot) =>
-        lot.id === lotId
-          ? { ...lot, palets: lot.palets.filter((palet) => palet.id !== paletId) }
-          : lot,
+  const removeLot = (receiptMaterialId: string, lotId: string) => {
+    setReceiptMaterials((current) =>
+      current.map((entry) =>
+        entry.id === receiptMaterialId
+          ? { ...entry, lots: entry.lots.filter((lot) => lot.id !== lotId) }
+          : entry,
       ),
     );
   };
 
-  const togglePalet = (lotId: string, paletId: string) => {
-    setTraceLots((current) =>
-      current.map((lot) =>
-        lot.id === lotId
+  const toggleLot = (receiptMaterialId: string, lotId: string) => {
+    setReceiptMaterials((current) =>
+      current.map((entry) =>
+        entry.id === receiptMaterialId
           ? {
-              ...lot,
-              palets: lot.palets.map((palet) =>
-                palet.id === paletId ? { ...palet, expanded: !palet.expanded } : palet,
+              ...entry,
+              lots: entry.lots.map((lot) =>
+                lot.id === lotId ? { ...lot, expanded: !lot.expanded } : lot,
               ),
             }
-          : lot,
+          : entry,
       ),
     );
   };
 
-  const addBatchRange = (lotId: string, paletId: string, from: string, to: string) => {
+  const addPalet = (receiptMaterialId: string, lotId: string, value: string) => {
+    const code = normalizeTraceCode(value);
+    if (!code) return false;
+
+    const receiptMaterial = receiptMaterials.find((entry) => entry.id === receiptMaterialId);
+    const targetLot = receiptMaterial?.lots.find((lot) => lot.id === lotId);
+    if (!targetLot) return false;
+
+    if (targetLot.palets.some((palet) => palet.code.toLowerCase() === code.toLowerCase())) {
+      return false;
+    }
+
+    setReceiptMaterials((current) =>
+      current.map((entry) =>
+        entry.id === receiptMaterialId
+          ? {
+              ...entry,
+              lots: entry.lots.map((lot) =>
+                lot.id === lotId
+                  ? {
+                      ...lot,
+                      palets: [
+                        ...lot.palets.map((palet) => ({ ...palet, expanded: false })),
+                        {
+                          id: `palet-${code}-${Date.now()}`,
+                          code,
+                          batches: [],
+                          expanded: true,
+                        },
+                      ],
+                    }
+                  : lot,
+              ),
+            }
+          : entry,
+      ),
+    );
+    return true;
+  };
+
+  const removePalet = (receiptMaterialId: string, lotId: string, paletId: string) => {
+    setReceiptMaterials((current) =>
+      current.map((entry) =>
+        entry.id === receiptMaterialId
+          ? {
+              ...entry,
+              lots: entry.lots.map((lot) =>
+                lot.id === lotId
+                  ? { ...lot, palets: lot.palets.filter((palet) => palet.id !== paletId) }
+                  : lot,
+              ),
+            }
+          : entry,
+      ),
+    );
+  };
+
+  const togglePalet = (receiptMaterialId: string, lotId: string, paletId: string) => {
+    setReceiptMaterials((current) =>
+      current.map((entry) =>
+        entry.id === receiptMaterialId
+          ? {
+              ...entry,
+              lots: entry.lots.map((lot) =>
+                lot.id === lotId
+                  ? {
+                      ...lot,
+                      palets: lot.palets.map((palet) =>
+                        palet.id === paletId ? { ...palet, expanded: !palet.expanded } : palet,
+                      ),
+                    }
+                  : lot,
+              ),
+            }
+          : entry,
+      ),
+    );
+  };
+
+  const addBatchRange = (
+    receiptMaterialId: string,
+    lotId: string,
+    paletId: string,
+    from: string,
+    to: string,
+  ) => {
     const range = createBatchRange(from, to);
     if (range.length === 0) return false;
 
-    setTraceLots((current) =>
-      current.map((lot) =>
-        lot.id === lotId
+    setReceiptMaterials((current) =>
+      current.map((entry) =>
+        entry.id === receiptMaterialId
           ? {
-              ...lot,
-              palets: lot.palets.map((palet) =>
-                palet.id === paletId
-                  ? { ...palet, batches: mergeBatches(palet.batches, range) }
-                  : palet,
+              ...entry,
+              lots: entry.lots.map((lot) =>
+                lot.id === lotId
+                  ? {
+                      ...lot,
+                      palets: lot.palets.map((palet) =>
+                        palet.id === paletId
+                          ? { ...palet, batches: mergeBatches(palet.batches, range) }
+                          : palet,
+                      ),
+                    }
+                  : lot,
               ),
             }
-          : lot,
+          : entry,
       ),
     );
     return true;
@@ -202,8 +301,7 @@ function ReceptionRoute() {
     setActiveStep(1);
     setRemito("");
     setReceptionDate("");
-    setSelectedMaterialCode("");
-    setTraceLots([]);
+    setReceiptMaterials([]);
   };
 
   const lockReceptionStart = () => {
@@ -246,12 +344,12 @@ function ReceptionRoute() {
                 </h1>
                 <p className="mt-1 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
                   {isConfirmed
-                    ? "El material queda pendiente de aprobación de Calidad."
+                    ? "Los materiales quedan pendientes de aprobación de Calidad."
                     : activeStep === 1 &&
-                      "Cargá remito, fecha y material; el proveedor se completa automáticamente."}
+                      "Cargá remito y fecha; después agregás los materiales incluidos."}
                   {!isConfirmed &&
                     activeStep === 2 &&
-                    "Cargá los identificadores y revisá la trazabilidad en vivo."}
+                    "Agregá materiales y cargá la trazabilidad de cada uno."}
                   {!isConfirmed &&
                     activeStep === 3 &&
                     "Revisá el resumen antes de confirmar el ingreso."}
@@ -293,10 +391,9 @@ function ReceptionRoute() {
             <div className="min-h-[390px] flex-1 px-5 py-7 sm:px-8 lg:px-12">
               {isConfirmed ? (
                 <ConfirmedStep
-                  selectedMaterial={selectedMaterial}
                   remito={remito}
                   provider={receptionProvider}
-                  lots={traceLots}
+                  receiptMaterials={receiptMaterials}
                   onFinishTurn={lockReceptionStart}
                   onRegisterAnotherRequest={resetReception}
                 />
@@ -308,19 +405,18 @@ function ReceptionRoute() {
                     <ReceptionDetailsStep
                       remito={remito}
                       receptionDate={receptionDate}
-                      selectedMaterial={selectedMaterial}
-                      selectedMaterialCode={selectedMaterialCode}
                       onRemitoChange={setRemito}
                       onReceptionDateChange={setReceptionDate}
-                      onMaterialChange={handleMaterialChange}
                     />
                   )}
                   {activeStep === 2 && (
                     <TraceabilityStep
-                      selectedMaterial={selectedMaterial}
                       remito={remito}
                       provider={receptionProvider}
-                      lots={traceLots}
+                      receiptMaterials={receiptMaterials}
+                      onAddReceiptMaterial={addReceiptMaterial}
+                      onRemoveReceiptMaterial={removeReceiptMaterial}
+                      onToggleReceiptMaterial={toggleReceiptMaterial}
                       onAddLot={addLot}
                       onRemoveLot={removeLot}
                       onToggleLot={toggleLot}
@@ -332,10 +428,9 @@ function ReceptionRoute() {
                   )}
                   {activeStep === 3 && (
                     <ConfirmStep
-                      selectedMaterial={selectedMaterial}
                       remito={remito}
                       provider={receptionProvider}
-                      lots={traceLots}
+                      receiptMaterials={receiptMaterials}
                     />
                   )}
                 </>
@@ -392,19 +487,13 @@ function ReceptionRoute() {
 function ReceptionDetailsStep({
   remito,
   receptionDate,
-  selectedMaterial,
-  selectedMaterialCode,
   onRemitoChange,
   onReceptionDateChange,
-  onMaterialChange,
 }: {
   remito: string;
   receptionDate: string;
-  selectedMaterial?: Material;
-  selectedMaterialCode: string;
   onRemitoChange: (value: string) => void;
   onReceptionDateChange: (value: string) => void;
-  onMaterialChange: (value: string) => void;
 }) {
   return (
     <div className="mx-auto grid max-w-4xl gap-5 md:grid-cols-2">
@@ -432,77 +521,37 @@ function ReceptionDetailsStep({
         />
       </FieldBlock>
 
-      <FieldBlock id="material" label="Material" required>
-        <Select value={selectedMaterialCode} onValueChange={onMaterialChange}>
-          <SelectTrigger
-            id="material"
-            className="reception-select-trigger h-11 text-left text-[13.5px] data-[placeholder]:text-muted-foreground"
-          >
-            <SelectValue placeholder="Seleccionar el tipo de material" />
-          </SelectTrigger>
-          <SelectContent>
-            {materials.map((material) => (
-              <SelectItem
-                key={material.code}
-                value={material.code}
-                textValue={materialLabel(material)}
-              >
-                {materialLabel(material)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </FieldBlock>
-
-      <FieldBlock id="proveedor" label="Proveedor" required>
-        <Input
-          id="proveedor"
-          value={selectedMaterial?.provider ?? ""}
-          readOnly
-          placeholder="Se completa al seleccionar material"
-          autoComplete="off"
-          className="reception-field h-11 text-[13.5px]"
-        />
-      </FieldBlock>
-
       <div className="rounded-lg border border-[#5E6AD2]/45 bg-[#5E6AD2]/10 p-5 md:col-span-2">
         <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground">
           <Info className="h-4 w-4 text-[#A8B1FF]" />
-          Trazabilidad requerida para este material
+          Materiales del remito
         </div>
-        {selectedMaterial ? (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {selectedMaterial.traceability.map((level, index) => (
-              <div key={level} className="flex items-center gap-2">
-                <span className="rounded-md border border-[#5E6AD2]/55 bg-background/50 px-3 py-1.5 text-[13px] font-semibold text-foreground">
-                  {level}
-                </span>
-                {index < selectedMaterial.traceability.length - 1 && (
-                  <ChevronRight className="h-4 w-4 text-[#A8B1FF]" />
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-4 text-[12.5px] leading-relaxed text-muted-foreground">
-            Seleccioná un material para ver la trazabilidad requerida.
-          </p>
-        )}
-        {selectedMaterial ? (
-          <p className="mt-4 text-[12.5px] leading-relaxed text-muted-foreground">
-            En el próximo paso vas a cargar los identificadores para cada nivel.
-          </p>
-        ) : null}
+        <p className="mt-3 text-[12.5px] leading-relaxed text-muted-foreground">
+          En el próximo paso vas a agregar uno o más materiales del remito y cargar la trazabilidad
+          de cada uno.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {["Material", "Lote", "Palet", "Batch"].map((level, index, levels) => (
+            <div key={level} className="flex items-center gap-2">
+              <span className="rounded-md border border-[#5E6AD2]/55 bg-background/50 px-3 py-1.5 text-[13px] font-semibold text-foreground">
+                {level}
+              </span>
+              {index < levels.length - 1 && <ChevronRight className="h-4 w-4 text-[#A8B1FF]" />}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
 
 function TraceabilityStep({
-  selectedMaterial,
   remito,
   provider,
-  lots,
+  receiptMaterials,
+  onAddReceiptMaterial,
+  onRemoveReceiptMaterial,
+  onToggleReceiptMaterial,
   onAddLot,
   onRemoveLot,
   onToggleLot,
@@ -511,23 +560,34 @@ function TraceabilityStep({
   onTogglePalet,
   onAddBatchRange,
 }: {
-  selectedMaterial?: Material;
   remito: string;
   provider: string;
-  lots: TraceLot[];
-  onAddLot: (value: string) => boolean;
-  onRemoveLot: (lotId: string) => void;
-  onToggleLot: (lotId: string) => void;
-  onAddPalet: (lotId: string, value: string) => boolean;
-  onRemovePalet: (lotId: string, paletId: string) => void;
-  onTogglePalet: (lotId: string, paletId: string) => void;
-  onAddBatchRange: (lotId: string, paletId: string, from: string, to: string) => boolean;
+  receiptMaterials: ReceiptMaterial[];
+  onAddReceiptMaterial: (materialCode: string) => boolean;
+  onRemoveReceiptMaterial: (receiptMaterialId: string) => void;
+  onToggleReceiptMaterial: (receiptMaterialId: string) => void;
+  onAddLot: (receiptMaterialId: string, value: string) => boolean;
+  onRemoveLot: (receiptMaterialId: string, lotId: string) => void;
+  onToggleLot: (receiptMaterialId: string, lotId: string) => void;
+  onAddPalet: (receiptMaterialId: string, lotId: string, value: string) => boolean;
+  onRemovePalet: (receiptMaterialId: string, lotId: string, paletId: string) => void;
+  onTogglePalet: (receiptMaterialId: string, lotId: string, paletId: string) => void;
+  onAddBatchRange: (
+    receiptMaterialId: string,
+    lotId: string,
+    paletId: string,
+    from: string,
+    to: string,
+  ) => boolean;
 }) {
   return (
     <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="min-w-0 space-y-5">
-        <LotTraceabilityForm
-          lots={lots}
+        <MaterialsTraceabilityForm
+          receiptMaterials={receiptMaterials}
+          onAddReceiptMaterial={onAddReceiptMaterial}
+          onRemoveReceiptMaterial={onRemoveReceiptMaterial}
+          onToggleReceiptMaterial={onToggleReceiptMaterial}
           onAddLot={onAddLot}
           onRemoveLot={onRemoveLot}
           onToggleLot={onToggleLot}
@@ -539,10 +599,9 @@ function TraceabilityStep({
       </div>
 
       <LiveTraceabilityPanel
-        selectedMaterial={selectedMaterial}
         remito={remito}
         provider={provider}
-        lots={lots}
+        receiptMaterials={receiptMaterials}
       />
     </div>
   );
@@ -553,29 +612,35 @@ function LockedReceptionStart() {
 }
 
 function ConfirmedStep({
-  selectedMaterial,
   remito,
   provider,
-  lots,
+  receiptMaterials,
   onFinishTurn,
   onRegisterAnotherRequest,
 }: {
-  selectedMaterial?: Material;
   remito: string;
   provider: string;
-  lots: TraceLot[];
+  receiptMaterials: ReceiptMaterial[];
   onFinishTurn: () => void;
   onRegisterAnotherRequest: () => void;
 }) {
-  const totalBatches = getTotalBatches(lots);
-  const totalPalets = getTotalPalets(lots);
+  const totalLots = getReceiptTotalLots(receiptMaterials);
+  const totalBatches = getReceiptTotalBatches(receiptMaterials);
+  const totalPalets = getReceiptTotalPalets(receiptMaterials);
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
-  const displayMaterial = selectedMaterial?.code ?? "Sin material";
   const traceSummary =
-    lots.length === 0
-      ? "Sin lotes cargados"
-      : `${lots.length} ${pluralize(lots.length, "lote", "lotes")} registrados`;
+    totalLots === 0
+      ? `${receiptMaterials.length} ${pluralize(
+          receiptMaterials.length,
+          "material",
+          "materiales",
+        )} sin lotes cargados`
+      : `${receiptMaterials.length} ${pluralize(
+          receiptMaterials.length,
+          "material",
+          "materiales",
+        )}, ${totalLots} ${pluralize(totalLots, "lote", "lotes")} registrados`;
 
   return (
     <div className="mx-auto flex min-h-[520px] max-w-3xl flex-col items-center justify-center py-10 text-center">
@@ -587,8 +652,7 @@ function ConfirmedStep({
         Ingreso registrado
       </h2>
       <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
-        Remito <span className="font-semibold text-foreground">{displayRemito}</span> -{" "}
-        <span className="font-medium text-foreground">{displayMaterial}</span> · Proveedor{" "}
+        Remito <span className="font-semibold text-foreground">{displayRemito}</span> · Proveedor{" "}
         <span className="font-medium text-foreground">{displayProvider}</span>.
       </p>
       <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
@@ -596,8 +660,9 @@ function ConfirmedStep({
         aprobación de Calidad.
       </p>
 
-      <div className="mt-8 grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
-        <LiveMetric label="Lotes" value={String(lots.length)} />
+      <div className="mt-8 grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
+        <LiveMetric label="Materiales" value={String(receiptMaterials.length)} />
+        <LiveMetric label="Lotes" value={String(totalLots)} />
         <LiveMetric label="Palets" value={String(totalPalets)} />
         <LiveMetric label="Batches" value={String(totalBatches)} />
       </div>
@@ -619,19 +684,16 @@ function ConfirmedStep({
 }
 
 function ConfirmStep({
-  selectedMaterial,
   remito,
   provider,
-  lots,
+  receiptMaterials,
 }: {
-  selectedMaterial?: Material;
   remito: string;
   provider: string;
-  lots: TraceLot[];
+  receiptMaterials: ReceiptMaterial[];
 }) {
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
-  const displayMaterial = selectedMaterial?.code ?? "Sin material";
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -641,14 +703,14 @@ function ConfirmStep({
           Resumen del ingreso
         </div>
         <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
-          Revisá remito, proveedor, material y trazabilidad antes de confirmar la recepción.
+          Revisá remito, proveedor, materiales y trazabilidad antes de confirmar la recepción.
         </p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
         <MaterialMeta label="Remito" value={displayRemito} mono />
         <MaterialMeta label="Proveedor" value={displayProvider} />
-        <MaterialMeta label="Material" value={displayMaterial} />
+        <MaterialMeta label="Materiales" value={String(receiptMaterials.length)} />
       </div>
 
       <section className="rounded-lg border border-border/80 bg-background/35 p-5">
@@ -657,14 +719,247 @@ function ConfirmStep({
           Trazabilidad
         </div>
 
-        <TraceabilitySummary lots={lots} />
+        <MaterialsTraceabilitySummary receiptMaterials={receiptMaterials} />
       </section>
+    </div>
+  );
+}
+
+function MaterialsTraceabilityForm({
+  receiptMaterials,
+  onAddReceiptMaterial,
+  onRemoveReceiptMaterial,
+  onToggleReceiptMaterial,
+  onAddLot,
+  onRemoveLot,
+  onToggleLot,
+  onAddPalet,
+  onRemovePalet,
+  onTogglePalet,
+  onAddBatchRange,
+}: {
+  receiptMaterials: ReceiptMaterial[];
+  onAddReceiptMaterial: (materialCode: string) => boolean;
+  onRemoveReceiptMaterial: (receiptMaterialId: string) => void;
+  onToggleReceiptMaterial: (receiptMaterialId: string) => void;
+  onAddLot: (receiptMaterialId: string, value: string) => boolean;
+  onRemoveLot: (receiptMaterialId: string, lotId: string) => void;
+  onToggleLot: (receiptMaterialId: string, lotId: string) => void;
+  onAddPalet: (receiptMaterialId: string, lotId: string, value: string) => boolean;
+  onRemovePalet: (receiptMaterialId: string, lotId: string, paletId: string) => void;
+  onTogglePalet: (receiptMaterialId: string, lotId: string, paletId: string) => void;
+  onAddBatchRange: (
+    receiptMaterialId: string,
+    lotId: string,
+    paletId: string,
+    from: string,
+    to: string,
+  ) => boolean;
+}) {
+  const [newMaterialCode, setNewMaterialCode] = useState("");
+  const availableMaterials = materials.filter(
+    (material) => !receiptMaterials.some((entry) => entry.materialCode === material.code),
+  );
+  const canAddMaterial = Boolean(newMaterialCode && availableMaterials.length > 0);
+
+  const addMaterial = () => {
+    const wasAdded = onAddReceiptMaterial(newMaterialCode);
+    if (!wasAdded) return;
+
+    setNewMaterialCode("");
+  };
+
+  return (
+    <section className="space-y-5">
+      <div className="min-w-0">
+        <div className="text-[19px] font-semibold tracking-tight text-foreground sm:text-[21px]">
+          Materiales del Remito
+        </div>
+        <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
+          Agregá cada material con sus lotes, palets y batches correspondientes.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        {receiptMaterials.map((receiptMaterial) => (
+          <ReceiptMaterialTraceCard
+            key={receiptMaterial.id}
+            receiptMaterial={receiptMaterial}
+            onRemove={() => onRemoveReceiptMaterial(receiptMaterial.id)}
+            onToggle={() => onToggleReceiptMaterial(receiptMaterial.id)}
+            onAddLot={(value) => onAddLot(receiptMaterial.id, value)}
+            onRemoveLot={(lotId) => onRemoveLot(receiptMaterial.id, lotId)}
+            onToggleLot={(lotId) => onToggleLot(receiptMaterial.id, lotId)}
+            onAddPalet={(lotId, value) => onAddPalet(receiptMaterial.id, lotId, value)}
+            onRemovePalet={(lotId, paletId) => onRemovePalet(receiptMaterial.id, lotId, paletId)}
+            onTogglePalet={(lotId, paletId) => onTogglePalet(receiptMaterial.id, lotId, paletId)}
+            onAddBatchRange={(lotId, paletId, from, to) =>
+              onAddBatchRange(receiptMaterial.id, lotId, paletId, from, to)
+            }
+          />
+        ))}
+
+        <div className="rounded-lg border border-border/80 bg-background/35 p-4">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+            Agregar material
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+            <Select
+              value={newMaterialCode}
+              onValueChange={setNewMaterialCode}
+              disabled={availableMaterials.length === 0}
+            >
+              <SelectTrigger className="reception-select-trigger h-10 text-left text-[13px] data-[placeholder]:text-muted-foreground">
+                <SelectValue
+                  placeholder={
+                    availableMaterials.length === 0
+                      ? "Todos los materiales agregados"
+                      : "Seleccionar material"
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {availableMaterials.map((material) => (
+                  <SelectItem
+                    key={material.code}
+                    value={material.code}
+                    textValue={materialLabel(material)}
+                  >
+                    {materialLabel(material)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
+              onClick={addMaterial}
+              disabled={!canAddMaterial}
+            >
+              <Plus className="h-4 w-4" />
+              Material
+            </Button>
+          </div>
+        </div>
+
+        {receiptMaterials.length === 0 ? (
+          <EmptyTraceState
+            icon={Boxes}
+            title="Sin materiales"
+            message="Agregá el primer material del remito para cargar sus lotes."
+            className="py-6"
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ReceiptMaterialTraceCard({
+  receiptMaterial,
+  onRemove,
+  onToggle,
+  onAddLot,
+  onRemoveLot,
+  onToggleLot,
+  onAddPalet,
+  onRemovePalet,
+  onTogglePalet,
+  onAddBatchRange,
+}: {
+  receiptMaterial: ReceiptMaterial;
+  onRemove: () => void;
+  onToggle: () => void;
+  onAddLot: (value: string) => boolean;
+  onRemoveLot: (lotId: string) => void;
+  onToggleLot: (lotId: string) => void;
+  onAddPalet: (lotId: string, value: string) => boolean;
+  onRemovePalet: (lotId: string, paletId: string) => void;
+  onTogglePalet: (lotId: string, paletId: string) => void;
+  onAddBatchRange: (lotId: string, paletId: string, from: string, to: string) => boolean;
+}) {
+  const material = getMaterialByCode(receiptMaterial.materialCode);
+  const totalPalets = getTotalPalets(receiptMaterial.lots);
+  const totalBatches = getTotalBatches(receiptMaterial.lots);
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/80 bg-background/30">
+      <div
+        className={cn(
+          "grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5",
+          receiptMaterial.expanded && "border-b border-border/70",
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="-ml-2 h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={onToggle}
+            title={receiptMaterial.expanded ? "Contraer material" : "Expandir material"}
+          >
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 transition-transform",
+                receiptMaterial.expanded && "rotate-180",
+              )}
+            />
+          </Button>
+          <Boxes className="h-4 w-4 shrink-0 text-[#A8B1FF]" />
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-semibold text-foreground">
+              Recepción Material {receiptMaterial.materialCode}
+            </div>
+            <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
+              {material?.provider ?? "Sin proveedor"}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 pl-10 sm:pl-0">
+          <MaterialTraceCountSummary
+            lots={receiptMaterial.lots.length}
+            palets={totalPalets}
+            batches={totalBatches}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+            onClick={onRemove}
+            title="Eliminar material"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+
+      {receiptMaterial.expanded && (
+        <div className="px-4 py-4 sm:px-5">
+          <LotTraceabilityForm
+            lots={receiptMaterial.lots}
+            title="Lotes del material"
+            description="Cargá cada lote de este material con sus palets y batches correspondientes."
+            onAddLot={onAddLot}
+            onRemoveLot={onRemoveLot}
+            onToggleLot={onToggleLot}
+            onAddPalet={onAddPalet}
+            onRemovePalet={onRemovePalet}
+            onTogglePalet={onTogglePalet}
+            onAddBatchRange={onAddBatchRange}
+          />
+        </div>
+      )}
     </div>
   );
 }
 
 function LotTraceabilityForm({
   lots,
+  title = "Lotes del Remito",
+  description = "Cargá cada lote con sus palets y batches correspondientes.",
   onAddLot,
   onRemoveLot,
   onToggleLot,
@@ -674,6 +969,8 @@ function LotTraceabilityForm({
   onAddBatchRange,
 }: {
   lots: TraceLot[];
+  title?: string;
+  description?: string;
   onAddLot: (value: string) => boolean;
   onRemoveLot: (lotId: string) => void;
   onToggleLot: (lotId: string) => void;
@@ -695,10 +992,10 @@ function LotTraceabilityForm({
     <section className="space-y-5">
       <div className="min-w-0">
         <div className="text-[19px] font-semibold tracking-tight text-foreground sm:text-[21px]">
-          Lotes del Remito
+          {title}
         </div>
         <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
-          Cargá cada lote con sus palets y batches correspondientes.
+          {description}
         </p>
       </div>
 
@@ -1053,6 +1350,34 @@ function TraceCountSummary({ palets, batches }: { palets: number; batches: numbe
   );
 }
 
+function MaterialTraceCountSummary({
+  lots,
+  palets,
+  batches,
+}: {
+  lots: number;
+  palets: number;
+  batches: number;
+}) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted-foreground sm:justify-end">
+      <span>
+        <strong className="font-semibold text-foreground">{lots}</strong>{" "}
+        {pluralize(lots, "lote", "lotes")}
+      </span>
+      <span className="text-muted-foreground/60">·</span>
+      <span>
+        <strong className="font-semibold text-foreground">{palets}</strong>{" "}
+        {pluralize(palets, "palet", "palets")}
+      </span>
+      <span className="text-muted-foreground/60">·</span>
+      <span>
+        <strong className="font-semibold text-foreground">{batches}</strong> batches
+      </span>
+    </div>
+  );
+}
+
 function EmptyTraceState({
   icon: Icon = Layers3,
   title,
@@ -1097,6 +1422,52 @@ function EmptyTraceState({
       )}
     >
       {content}
+    </div>
+  );
+}
+
+function MaterialsTraceabilitySummary({
+  receiptMaterials,
+}: {
+  receiptMaterials: ReceiptMaterial[];
+}) {
+  if (receiptMaterials.length === 0) {
+    return (
+      <div className="mt-4 rounded-md border border-dashed border-border/80 bg-background/30 px-3 py-3 text-[12.5px] text-muted-foreground">
+        Sin materiales registrados.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 space-y-4">
+      {receiptMaterials.map((receiptMaterial) => {
+        const totalPalets = getTotalPalets(receiptMaterial.lots);
+        const totalBatches = getTotalBatches(receiptMaterial.lots);
+
+        return (
+          <div
+            key={receiptMaterial.id}
+            className="rounded-md border border-border/70 bg-card/60 px-4 py-3"
+          >
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <Boxes className="h-3.5 w-3.5 shrink-0 text-[#A8B1FF]" />
+                <span className="text-[15px] font-semibold text-foreground">
+                  Recepción Material {receiptMaterial.materialCode}
+                </span>
+              </div>
+              <span className="text-[12.5px] text-muted-foreground">
+                ({receiptMaterial.lots.length}{" "}
+                {pluralize(receiptMaterial.lots.length, "lote", "lotes")}, {totalPalets}{" "}
+                {pluralize(totalPalets, "palet", "palets")}, {totalBatches} batches)
+              </span>
+            </div>
+
+            <TraceabilitySummary lots={receiptMaterial.lots} />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1176,18 +1547,17 @@ function TraceabilitySummary({ lots }: { lots: TraceLot[] }) {
 }
 
 function LiveTraceabilityPanel({
-  selectedMaterial,
   remito,
   provider,
-  lots,
+  receiptMaterials,
 }: {
-  selectedMaterial?: Material;
   remito: string;
   provider: string;
-  lots: TraceLot[];
+  receiptMaterials: ReceiptMaterial[];
 }) {
-  const totalBatches = getTotalBatches(lots);
-  const totalPalets = getTotalPalets(lots);
+  const totalLots = getReceiptTotalLots(receiptMaterials);
+  const totalBatches = getReceiptTotalBatches(receiptMaterials);
+  const totalPalets = getReceiptTotalPalets(receiptMaterials);
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
 
@@ -1203,62 +1573,77 @@ function LiveTraceabilityPanel({
         </div>
       </div>
 
-      <div className="rounded-lg border border-border/80 bg-background/35 p-4">
-        <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
-          <Boxes className="h-4 w-4 text-[#A8B1FF]" />
-          {selectedMaterial?.code
-            ? `Recepción Material ${selectedMaterial.code}`
-            : "Recepción Material"}
-        </div>
-
-        <div className="mt-4 border-t border-border/70 pt-4">
-          {lots.length === 0 ? (
-            <div className="text-[12px] text-muted-foreground">Sin lotes registrados</div>
-          ) : (
-            <div className="space-y-3">
-              {lots.map((lot) => (
-                <div key={lot.id} className="flex items-start gap-2">
-                  <FileText className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
-                  <div className="min-w-0">
-                    <div className="font-mono text-[13px] font-semibold text-foreground">
-                      Lote {formatLotCode(lot)}
-                    </div>
-                    <div className="mt-0.5 text-[12px] text-muted-foreground">
-                      {lot.palets.length} {pluralize(lot.palets.length, "palet", "palets")} ·{" "}
-                      {getLotBatchCount(lot)} batches
-                    </div>
-
-                    {lot.palets.length > 0 ? (
-                      <div className="mt-2 space-y-2 border-l border-border/80 pl-4">
-                        {lot.palets.map((palet) => (
-                          <div key={palet.id} className="flex items-start gap-2">
-                            <Layers3 className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
-                            <div>
-                              <div className="font-mono text-[13px] font-semibold text-foreground">
-                                Palet {palet.code}
-                              </div>
-                              <div className="mt-0.5 text-[12px] text-muted-foreground">
-                                ({palet.batches.length} batches)
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="space-y-3">
+        {receiptMaterials.length === 0 ? (
+          <div className="rounded-lg border border-border/80 bg-background/35 p-4 text-[12px] text-muted-foreground">
+            Sin materiales registrados
+          </div>
+        ) : (
+          receiptMaterials.map((receiptMaterial) => (
+            <LiveMaterialSummary key={receiptMaterial.id} receiptMaterial={receiptMaterial} />
+          ))
+        )}
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-3">
-        <LiveMetric label="Lotes" value={String(lots.length)} />
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <LiveMetric label="Materiales" value={String(receiptMaterials.length)} />
+        <LiveMetric label="Lotes" value={String(totalLots)} />
         <LiveMetric label="Palets" value={String(totalPalets)} />
         <LiveMetric label="Batches" value={String(totalBatches)} />
       </div>
     </aside>
+  );
+}
+
+function LiveMaterialSummary({ receiptMaterial }: { receiptMaterial: ReceiptMaterial }) {
+  return (
+    <div className="rounded-lg border border-border/80 bg-background/35 p-4">
+      <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
+        <Boxes className="h-4 w-4 text-[#A8B1FF]" />
+        Recepción Material {receiptMaterial.materialCode}
+      </div>
+
+      <div className="mt-4 border-t border-border/70 pt-4">
+        {receiptMaterial.lots.length === 0 ? (
+          <div className="text-[12px] text-muted-foreground">Sin lotes registrados</div>
+        ) : (
+          <div className="space-y-3">
+            {receiptMaterial.lots.map((lot) => (
+              <div key={lot.id} className="flex items-start gap-2">
+                <FileText className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
+                <div className="min-w-0">
+                  <div className="font-mono text-[13px] font-semibold text-foreground">
+                    Lote {formatLotCode(lot)}
+                  </div>
+                  <div className="mt-0.5 text-[12px] text-muted-foreground">
+                    {lot.palets.length} {pluralize(lot.palets.length, "palet", "palets")} ·{" "}
+                    {getLotBatchCount(lot)} batches
+                  </div>
+
+                  {lot.palets.length > 0 ? (
+                    <div className="mt-2 space-y-2 border-l border-border/80 pl-4">
+                      {lot.palets.map((palet) => (
+                        <div key={palet.id} className="flex items-start gap-2">
+                          <Layers3 className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
+                          <div>
+                            <div className="font-mono text-[13px] font-semibold text-foreground">
+                              Palet {palet.code}
+                            </div>
+                            <div className="mt-0.5 text-[12px] text-muted-foreground">
+                              ({palet.batches.length} batches)
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1302,6 +1687,22 @@ function LiveMetric({ label, value, mono }: { label: string; value: string; mono
   );
 }
 
+function getMaterialByCode(code: string) {
+  return materials.find((material) => material.code === code);
+}
+
+function getReceiptProviderLabel(receiptMaterials: ReceiptMaterial[]) {
+  const providers = Array.from(
+    new Set(
+      receiptMaterials
+        .map((entry) => getMaterialByCode(entry.materialCode)?.provider)
+        .filter((provider): provider is string => Boolean(provider)),
+    ),
+  );
+
+  return providers.length > 0 ? providers.join(", ") : "";
+}
+
 function normalizeTraceCode(value: string) {
   return value.trim().replace(/\s+/g, "-").toUpperCase();
 }
@@ -1330,6 +1731,18 @@ function getTotalPalets(lots: TraceLot[]) {
 
 function getTotalBatches(lots: TraceLot[]) {
   return lots.reduce((total, lot) => total + getLotBatchCount(lot), 0);
+}
+
+function getReceiptTotalLots(receiptMaterials: ReceiptMaterial[]) {
+  return receiptMaterials.reduce((total, entry) => total + entry.lots.length, 0);
+}
+
+function getReceiptTotalPalets(receiptMaterials: ReceiptMaterial[]) {
+  return receiptMaterials.reduce((total, entry) => total + getTotalPalets(entry.lots), 0);
+}
+
+function getReceiptTotalBatches(receiptMaterials: ReceiptMaterial[]) {
+  return receiptMaterials.reduce((total, entry) => total + getTotalBatches(entry.lots), 0);
 }
 
 function formatLotCode(lot: TraceLot) {
