@@ -313,6 +313,21 @@
       0 1px 2px 0 rgb(0 0 0 / 0.14) !important;
   }
 
+  .reception-field-error,
+  .reception-field-error:hover,
+  .reception-field-error:focus,
+  .reception-field-error:focus-visible,
+  .reception-field-error[data-state="open"] {
+    border-color: rgb(248 113 113 / 0.95) !important;
+    box-shadow:
+      0 0 0 1px rgb(248 113 113 / 0.65),
+      0 1px 2px 0 rgb(0 0 0 / 0.14) !important;
+  }
+
+  .reception-error-shake {
+    animation: reception-input-shake 220ms ease-in-out;
+  }
+
   .reception-calendar-surface {
     --primary: #5e6ad2;
     --primary-foreground: white;
@@ -341,6 +356,25 @@
   .reception-calendar-surface [data-range-middle="true"] {
     background-color: rgb(94 106 210 / 0.16) !important;
     color: var(--color-foreground) !important;
+  }
+}
+
+@keyframes reception-input-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-4px);
+  }
+
+  50% {
+    transform: translateX(4px);
+  }
+
+  75% {
+    transform: translateX(-2px);
   }
 }
 

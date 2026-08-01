@@ -79,6 +79,17 @@ type ReceiptMaterial = {
   expanded: boolean;
 };
 
+type FieldError = {
+  message: string;
+  nonce: number;
+};
+
+type StepOneErrors = {
+  remito?: FieldError;
+  receptionDate?: FieldError;
+  materials?: FieldError;
+};
+
 function ReceptionRoute() {
   const [activeStep, setActiveStep] = useState(1);
   const [isConfirmed, setIsConfirmed] = useState(false);
@@ -86,11 +97,23 @@ function ReceptionRoute() {
   const [remito, setRemito] = useState("");
   const [receptionDate, setReceptionDate] = useState("");
   const [receiptMaterials, setReceiptMaterials] = useState<ReceiptMaterial[]>([]);
+  const [stepOneErrors, setStepOneErrors] = useState<StepOneErrors>({});
   const receptionProvider = getReceiptProviderLabel(receiptMaterials);
   const isAwaitingEntryAuth = !isConfirmed && !isEntryUnlocked;
-  const canContinue =
-    (activeStep === 1 && Boolean(remito.trim() && receptionDate && receiptMaterials.length > 0)) ||
-    activeStep > 1;
+
+  const updateRemito = (value: string) => {
+    setRemito(value);
+    if (value.trim()) {
+      setStepOneErrors((current) => ({ ...current, remito: undefined }));
+    }
+  };
+
+  const updateReceptionDate = (value: string) => {
+    setReceptionDate(value);
+    if (value) {
+      setStepOneErrors((current) => ({ ...current, receptionDate: undefined }));
+    }
+  };
 
   const addReceiptMaterial = (materialCode: string) => {
     const material = materials.find((item) => item.code === materialCode);
@@ -109,6 +132,7 @@ function ReceptionRoute() {
         expanded: true,
       },
     ]);
+    setStepOneErrors((current) => ({ ...current, materials: undefined }));
     return true;
   };
 
@@ -127,6 +151,7 @@ function ReceptionRoute() {
   const addLot = (receiptMaterialId: string, value: string) => {
     const code = normalizeTraceCode(value);
     if (!code) return false;
+    if (parsePositiveInteger(code) === undefined) return false;
 
     const receiptMaterial = receiptMaterials.find((entry) => entry.id === receiptMaterialId);
     if (!receiptMaterial) return false;
@@ -184,6 +209,7 @@ function ReceptionRoute() {
   const addPalet = (receiptMaterialId: string, lotId: string, value: string) => {
     const code = normalizeTraceCode(value);
     if (!code) return false;
+    if (parsePositiveInteger(code) === undefined) return false;
 
     const receiptMaterial = receiptMaterials.find((entry) => entry.id === receiptMaterialId);
     const targetLot = receiptMaterial?.lots.find((lot) => lot.id === lotId);
@@ -300,6 +326,7 @@ function ReceptionRoute() {
     setRemito("");
     setReceptionDate("");
     setReceiptMaterials([]);
+    setStepOneErrors({});
   };
 
   const lockReceptionStart = () => {
@@ -308,9 +335,33 @@ function ReceptionRoute() {
   };
 
   const handlePrimaryAction = () => {
-    if (!canContinue) return;
-
     if (activeStep === 1) {
+      const isRemitoMissing = !remito.trim();
+      const isReceptionDateMissing = !receptionDate;
+      const areMaterialsMissing = receiptMaterials.length === 0;
+
+      if (isRemitoMissing || isReceptionDateMissing || areMaterialsMissing) {
+        setStepOneErrors((current) => ({
+          remito: isRemitoMissing
+            ? createFieldError("Ingresá el número de remito para continuar.", current.remito)
+            : undefined,
+          receptionDate: isReceptionDateMissing
+            ? createFieldError(
+                "Seleccioná la fecha de recepción del remito.",
+                current.receptionDate,
+              )
+            : undefined,
+          materials: areMaterialsMissing
+            ? createFieldError(
+                "Agregá al menos un material incluido en este remito.",
+                current.materials,
+              )
+            : undefined,
+        }));
+        return;
+      }
+
+      setStepOneErrors({});
       setRemito(remito.trim());
       setReceiptMaterials((current) =>
         current.map((entry, index) => ({ ...entry, expanded: index === 0 })),
@@ -406,8 +457,9 @@ function ReceptionRoute() {
                       remito={remito}
                       receptionDate={receptionDate}
                       receiptMaterials={receiptMaterials}
-                      onRemitoChange={setRemito}
-                      onReceptionDateChange={setReceptionDate}
+                      validationErrors={stepOneErrors}
+                      onRemitoChange={updateRemito}
+                      onReceptionDateChange={updateReceptionDate}
                       onAddReceiptMaterial={addReceiptMaterial}
                       onRemoveReceiptMaterial={removeReceiptMaterial}
                     />
@@ -467,7 +519,6 @@ function ReceptionRoute() {
                       type="button"
                       className="h-10 bg-[#5E6AD2] px-5 text-white hover:bg-[#6875E8]"
                       onClick={handlePrimaryAction}
-                      disabled={!canContinue}
                     >
                       {activeStep === 3 ? "Confirmar" : "Continuar"}
                       {activeStep === 3 ? <ShieldCheck className="h-4 w-4" /> : null}
@@ -489,6 +540,7 @@ function ReceptionDetailsStep({
   remito,
   receptionDate,
   receiptMaterials,
+  validationErrors,
   onRemitoChange,
   onReceptionDateChange,
   onAddReceiptMaterial,
@@ -497,6 +549,7 @@ function ReceptionDetailsStep({
   remito: string;
   receptionDate: string;
   receiptMaterials: ReceiptMaterial[];
+  validationErrors: StepOneErrors;
   onRemitoChange: (value: string) => void;
   onReceptionDateChange: (value: string) => void;
   onAddReceiptMaterial: (materialCode: string) => boolean;
@@ -514,31 +567,51 @@ function ReceptionDetailsStep({
       </div>
 
       <FieldBlock id="remito" label="N° de remito" required>
-        <Input
-          id="remito"
-          value={remito}
-          onChange={(event) => onRemitoChange(event.target.value)}
-          placeholder={`Ej: ${remitoExample}`}
-          autoComplete="off"
-          className="reception-field h-11 font-mono text-[13.5px]"
-        />
+        <div
+          key={validationErrors.remito?.nonce}
+          className={cn(validationErrors.remito && "reception-error-shake")}
+        >
+          <Input
+            id="remito"
+            value={remito}
+            onChange={(event) => onRemitoChange(event.target.value)}
+            placeholder={`Ej: ${remitoExample}`}
+            autoComplete="off"
+            aria-invalid={Boolean(validationErrors.remito)}
+            className={cn(
+              "reception-field h-11 font-mono text-[13.5px]",
+              validationErrors.remito && "reception-field-error",
+            )}
+          />
+        </div>
+        <ValidationMessage error={validationErrors.remito} />
       </FieldBlock>
 
       <FieldBlock id="fecha-recepcion" label="Fecha de recepción" required>
-        <DateInput
-          id="fecha-recepcion"
-          value={receptionDate}
-          onChange={onReceptionDateChange}
-          placeholder="Seleccionar fecha de recepción"
-          triggerBaseClassName="reception-date-trigger"
-          triggerClassName="h-11 text-[13.5px]"
-          iconClassName="h-4 w-4 text-[#A8B1FF]"
-          calendarClassName="reception-calendar-surface"
-        />
+        <div
+          key={validationErrors.receptionDate?.nonce}
+          className={cn(validationErrors.receptionDate && "reception-error-shake")}
+        >
+          <DateInput
+            id="fecha-recepcion"
+            value={receptionDate}
+            onChange={onReceptionDateChange}
+            placeholder="Seleccionar fecha de recepción"
+            triggerBaseClassName="reception-date-trigger"
+            triggerClassName={cn(
+              "h-11 text-[13.5px]",
+              validationErrors.receptionDate && "reception-field-error",
+            )}
+            iconClassName="h-4 w-4 text-[#A8B1FF]"
+            calendarClassName="reception-calendar-surface"
+          />
+        </div>
+        <ValidationMessage error={validationErrors.receptionDate} />
       </FieldBlock>
 
       <MaterialsSelectionForm
         receiptMaterials={receiptMaterials}
+        error={validationErrors.materials}
         onAddReceiptMaterial={onAddReceiptMaterial}
         onRemoveReceiptMaterial={onRemoveReceiptMaterial}
       />
@@ -722,24 +795,42 @@ function ConfirmStep({
 
 function MaterialsSelectionForm({
   receiptMaterials,
+  error,
   onAddReceiptMaterial,
   onRemoveReceiptMaterial,
 }: {
   receiptMaterials: ReceiptMaterial[];
+  error?: FieldError;
   onAddReceiptMaterial: (materialCode: string) => boolean;
   onRemoveReceiptMaterial: (receiptMaterialId: string) => void;
 }) {
   const [newMaterialCode, setNewMaterialCode] = useState("");
+  const [materialError, setMaterialError] = useState<FieldError | undefined>();
   const availableMaterials = materials.filter(
     (material) => !receiptMaterials.some((entry) => entry.materialCode === material.code),
   );
-  const canAddMaterial = Boolean(newMaterialCode && availableMaterials.length > 0);
+  const displayedError = materialError ?? error;
 
   const addMaterial = () => {
+    if (availableMaterials.length === 0) return;
+
+    if (!newMaterialCode) {
+      setMaterialError((current) =>
+        createFieldError("Seleccioná un material antes de agregarlo.", current),
+      );
+      return;
+    }
+
     const wasAdded = onAddReceiptMaterial(newMaterialCode);
-    if (!wasAdded) return;
+    if (!wasAdded) {
+      setMaterialError((current) =>
+        createFieldError("Ese material ya está agregado al remito.", current),
+      );
+      return;
+    }
 
     setNewMaterialCode("");
+    setMaterialError(undefined);
   };
 
   return (
@@ -758,13 +849,27 @@ function MaterialsSelectionForm({
         <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
           Agregar material
         </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+        <div
+          key={displayedError?.nonce}
+          className={cn(
+            "mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]",
+            displayedError && "reception-error-shake",
+          )}
+        >
           <Select
             value={newMaterialCode}
-            onValueChange={setNewMaterialCode}
+            onValueChange={(value) => {
+              setNewMaterialCode(value);
+              setMaterialError(undefined);
+            }}
             disabled={availableMaterials.length === 0}
           >
-            <SelectTrigger className="reception-select-trigger h-10 text-left text-[13px] data-[placeholder]:text-muted-foreground">
+            <SelectTrigger
+              className={cn(
+                "reception-select-trigger h-10 text-left text-[13px] data-[placeholder]:text-muted-foreground",
+                displayedError && "reception-field-error",
+              )}
+            >
               <SelectValue
                 placeholder={
                   availableMaterials.length === 0
@@ -789,12 +894,13 @@ function MaterialsSelectionForm({
             type="button"
             className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
             onClick={addMaterial}
-            disabled={!canAddMaterial}
+            disabled={availableMaterials.length === 0}
           >
             <Plus className="h-4 w-4" />
             Material
           </Button>
         </div>
+        <ValidationMessage error={displayedError} />
       </div>
 
       {receiptMaterials.length === 0 ? (
@@ -1068,12 +1174,39 @@ function LotTraceabilityForm({
   onAddBatchRange: (lotId: string, paletId: string, from: string, to: string) => boolean;
 }) {
   const [newLotCode, setNewLotCode] = useState("");
+  const [newLotError, setNewLotError] = useState<FieldError | undefined>();
 
   const addLot = () => {
+    const code = normalizeTraceCode(newLotCode);
+    if (!code) {
+      setNewLotError((current) => createFieldError("Ingresá el número de lote.", current));
+      return;
+    }
+
+    if (parsePositiveInteger(code) === undefined) {
+      setNewLotError((current) =>
+        createFieldError("El lote debe ser un número mayor a cero.", current),
+      );
+      return;
+    }
+
+    if (lots.some((lot) => lot.code.toLowerCase() === code.toLowerCase())) {
+      setNewLotError((current) =>
+        createFieldError(`El lote ${code} ya está cargado para este material.`, current),
+      );
+      return;
+    }
+
     const wasAdded = onAddLot(newLotCode);
-    if (!wasAdded) return;
+    if (!wasAdded) {
+      setNewLotError((current) =>
+        createFieldError("No se pudo agregar el lote. Revisá el número ingresado.", current),
+      );
+      return;
+    }
 
     setNewLotCode("");
+    setNewLotError(undefined);
   };
 
   return (
@@ -1105,11 +1238,21 @@ function LotTraceabilityForm({
           <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
             Agregar lote
           </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+          <div
+            key={newLotError?.nonce}
+            className={cn(
+              "mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]",
+              newLotError && "reception-error-shake",
+            )}
+          >
             <Input
               placeholder="N° lote (ej. 24)"
               value={newLotCode}
-              onChange={(event) => setNewLotCode(event.target.value)}
+              onChange={(event) => {
+                setNewLotCode(event.target.value);
+                setNewLotError(undefined);
+              }}
+              inputMode="numeric"
               autoComplete="off"
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -1117,18 +1260,22 @@ function LotTraceabilityForm({
                   addLot();
                 }
               }}
-              className="reception-field h-10 font-mono text-[13px]"
+              aria-invalid={Boolean(newLotError)}
+              className={cn(
+                "reception-field h-10 font-mono text-[13px]",
+                newLotError && "reception-field-error",
+              )}
             />
             <Button
               type="button"
               className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
               onClick={addLot}
-              disabled={!newLotCode.trim()}
             >
               <Plus className="h-4 w-4" />
               Lote
             </Button>
           </div>
+          <ValidationMessage error={newLotError} />
         </div>
 
         {lots.length === 0 ? (
@@ -1146,10 +1293,12 @@ function LotTraceabilityForm({
 
 function AddPaletPanel({
   value,
+  error,
   onValueChange,
   onAdd,
 }: {
   value: string;
+  error?: FieldError;
   onValueChange: (value: string) => void;
   onAdd: () => void;
 }) {
@@ -1158,11 +1307,18 @@ function AddPaletPanel({
       <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
         Agregar palet a este lote
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+      <div
+        key={error?.nonce}
+        className={cn(
+          "mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]",
+          error && "reception-error-shake",
+        )}
+      >
         <Input
-          placeholder="N° palet (ej. P-01)"
+          placeholder="N° palet (ej. 1)"
           value={value}
           onChange={(event) => onValueChange(event.target.value)}
+          inputMode="numeric"
           autoComplete="off"
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -1170,18 +1326,22 @@ function AddPaletPanel({
               onAdd();
             }
           }}
-          className="reception-field h-10 font-mono text-[13px]"
+          aria-invalid={Boolean(error)}
+          className={cn(
+            "reception-field h-10 font-mono text-[13px]",
+            error && "reception-field-error",
+          )}
         />
         <Button
           type="button"
           className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
           onClick={onAdd}
-          disabled={!value.trim()}
         >
           <Plus className="h-4 w-4" />
           Palet
         </Button>
       </div>
+      <ValidationMessage error={error} />
     </div>
   );
 }
@@ -1204,13 +1364,40 @@ function LotTraceCard({
   onAddBatchRange: (paletId: string, from: string, to: string) => boolean;
 }) {
   const [newPaletCode, setNewPaletCode] = useState("");
+  const [newPaletError, setNewPaletError] = useState<FieldError | undefined>();
   const batchCount = getLotBatchCount(lot);
 
   const addPalet = () => {
+    const code = normalizeTraceCode(newPaletCode);
+    if (!code) {
+      setNewPaletError((current) => createFieldError("Ingresá el número de palet.", current));
+      return;
+    }
+
+    if (parsePositiveInteger(code) === undefined) {
+      setNewPaletError((current) =>
+        createFieldError("El palet debe ser un número mayor a cero.", current),
+      );
+      return;
+    }
+
+    if (lot.palets.some((palet) => palet.code.toLowerCase() === code.toLowerCase())) {
+      setNewPaletError((current) =>
+        createFieldError(`El palet ${code} ya está cargado en este lote.`, current),
+      );
+      return;
+    }
+
     const wasAdded = onAddPalet(newPaletCode);
-    if (!wasAdded) return;
+    if (!wasAdded) {
+      setNewPaletError((current) =>
+        createFieldError("No se pudo agregar el palet. Revisá el número ingresado.", current),
+      );
+      return;
+    }
 
     setNewPaletCode("");
+    setNewPaletError(undefined);
   };
 
   return (
@@ -1261,7 +1448,11 @@ function LotTraceCard({
             <>
               <AddPaletPanel
                 value={newPaletCode}
-                onValueChange={setNewPaletCode}
+                error={newPaletError}
+                onValueChange={(value) => {
+                  setNewPaletCode(value);
+                  setNewPaletError(undefined);
+                }}
                 onAdd={addPalet}
               />
               <EmptyTraceState
@@ -1284,7 +1475,11 @@ function LotTraceCard({
               ))}
               <AddPaletPanel
                 value={newPaletCode}
-                onValueChange={setNewPaletCode}
+                error={newPaletError}
+                onValueChange={(value) => {
+                  setNewPaletCode(value);
+                  setNewPaletError(undefined);
+                }}
                 onAdd={addPalet}
               />
             </>
@@ -1308,13 +1503,59 @@ function PaletTraceCard({
 }) {
   const [batchFrom, setBatchFrom] = useState("");
   const [batchTo, setBatchTo] = useState("");
+  const [batchRangeError, setBatchRangeError] = useState<FieldError | undefined>();
 
   const addRange = () => {
+    const from = batchFrom.trim();
+    const to = batchTo.trim();
+
+    if (!from || !to) {
+      setBatchRangeError((current) =>
+        createFieldError("Completá el batch inicial y el batch final.", current),
+      );
+      return;
+    }
+
+    const start = parsePositiveInteger(from);
+    const end = parsePositiveInteger(to);
+
+    if (start === undefined || end === undefined) {
+      setBatchRangeError((current) =>
+        createFieldError("Los batches deben ser números mayores a cero.", current),
+      );
+      return;
+    }
+
+    if (end < start) {
+      setBatchRangeError((current) =>
+        createFieldError("El batch final debe ser mayor o igual al batch inicial.", current),
+      );
+      return;
+    }
+
+    const range = createBatchRange(from, to);
+    const repeatedBatches = range.filter((batch) => palet.batches.includes(batch));
+    if (repeatedBatches.length > 0) {
+      setBatchRangeError((current) =>
+        createFieldError(
+          `El rango incluye batches ya cargados: ${formatRepeatedBatches(repeatedBatches)}.`,
+          current,
+        ),
+      );
+      return;
+    }
+
     const wasAdded = onAddBatchRange(batchFrom, batchTo);
-    if (!wasAdded) return;
+    if (!wasAdded) {
+      setBatchRangeError((current) =>
+        createFieldError("No se pudo agregar el rango. Revisá los valores ingresados.", current),
+      );
+      return;
+    }
 
     setBatchFrom("");
     setBatchTo("");
+    setBatchRangeError(undefined);
   };
 
   return (
@@ -1367,19 +1608,35 @@ function PaletTraceCard({
           <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
             Rango de batches
           </div>
-          <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)_160px] md:items-center">
+          <div
+            key={batchRangeError?.nonce}
+            className={cn(
+              "mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)_160px] md:items-center",
+              batchRangeError && "reception-error-shake",
+            )}
+          >
             <Input
               value={batchFrom}
-              onChange={(event) => setBatchFrom(event.target.value)}
+              onChange={(event) => {
+                setBatchFrom(event.target.value);
+                setBatchRangeError(undefined);
+              }}
               placeholder="Desde"
               inputMode="numeric"
               autoComplete="off"
-              className="reception-field h-10 text-[13px]"
+              aria-invalid={Boolean(batchRangeError)}
+              className={cn(
+                "reception-field h-10 text-[13px]",
+                batchRangeError && "reception-field-error",
+              )}
             />
             <ChevronRight className="hidden h-4 w-4 justify-self-center text-muted-foreground md:block" />
             <Input
               value={batchTo}
-              onChange={(event) => setBatchTo(event.target.value)}
+              onChange={(event) => {
+                setBatchTo(event.target.value);
+                setBatchRangeError(undefined);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
@@ -1389,7 +1646,11 @@ function PaletTraceCard({
               placeholder="Hasta"
               inputMode="numeric"
               autoComplete="off"
-              className="reception-field h-10 text-[13px]"
+              aria-invalid={Boolean(batchRangeError)}
+              className={cn(
+                "reception-field h-10 text-[13px]",
+                batchRangeError && "reception-field-error",
+              )}
             />
             <Button
               type="button"
@@ -1400,6 +1661,7 @@ function PaletTraceCard({
               Agregar
             </Button>
           </div>
+          <ValidationMessage error={batchRangeError} />
 
           {palet.batches.length === 0 ? (
             <div className="mt-4 rounded-md border border-dashed border-border/80 bg-background/30 px-3 py-2 text-[12.5px] text-muted-foreground">
@@ -1775,6 +2037,13 @@ function LiveMetric({ label, value, mono }: { label: string; value: string; mono
   );
 }
 
+function createFieldError(message: string, current?: FieldError) {
+  return {
+    message,
+    nonce: (current?.nonce ?? 0) + 1,
+  };
+}
+
 function getMaterialByCode(code: string) {
   return materials.find((material) => material.code === code);
 }
@@ -1795,6 +2064,14 @@ function normalizeTraceCode(value: string) {
   return value.trim().replace(/\s+/g, "-").toUpperCase();
 }
 
+function parsePositiveInteger(value: string) {
+  const trimmedValue = value.trim();
+  if (!/^\d+$/.test(trimmedValue)) return undefined;
+
+  const parsedValue = Number.parseInt(trimmedValue, 10);
+  return parsedValue > 0 ? parsedValue : undefined;
+}
+
 function createBatchRange(from: string, to: string) {
   const start = Number.parseInt(from, 10);
   const end = Number.parseInt(to, 10);
@@ -1807,6 +2084,11 @@ function createBatchRange(from: string, to: string) {
 
 function mergeBatches(current: string[], next: string[]) {
   return Array.from(new Set([...current, ...next])).sort((a, b) => Number(a) - Number(b));
+}
+
+function formatRepeatedBatches(batches: string[]) {
+  const visibleBatches = batches.slice(0, 5).join(", ");
+  return batches.length > 5 ? `${visibleBatches} y ${batches.length - 5} más` : visibleBatches;
 }
 
 function getLotBatchCount(lot: TraceLot) {
@@ -1905,6 +2187,12 @@ function StepItem({
       {showLine && <span className="ml-4 h-px min-w-8 flex-1 bg-border/80" />}
     </li>
   );
+}
+
+function ValidationMessage({ error }: { error?: FieldError }) {
+  if (!error) return null;
+
+  return <p className="mt-2 text-[12px] font-medium text-red-400">{error.message}</p>;
 }
 
 function FieldBlock({
