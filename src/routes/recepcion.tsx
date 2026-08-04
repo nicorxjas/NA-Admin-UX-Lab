@@ -52,6 +52,11 @@ const materials = [
     provider: "Química del Sur",
     traceability: ["Lote", "Palet", "Batch"],
   },
+  {
+    code: "Tela Flux",
+    provider: "Telas S.A.",
+    traceability: ["Rollo"],
+  },
 ];
 
 const remitoExample = "R-0087421";
@@ -76,6 +81,7 @@ type ReceiptMaterial = {
   id: string;
   materialCode: string;
   lots: TraceLot[];
+  rolls: string[];
   expanded: boolean;
 };
 
@@ -129,6 +135,7 @@ function ReceptionRoute() {
         id: `material-${material.code}-${Date.now()}`,
         materialCode: material.code,
         lots: [],
+        rolls: [],
         expanded: true,
       },
     ]);
@@ -320,6 +327,31 @@ function ReceptionRoute() {
     return true;
   };
 
+  const addRollRange = (receiptMaterialId: string, from: string, to: string) => {
+    const range = createNumberRange(from, to);
+    if (range.length === 0) return false;
+
+    const receiptMaterial = receiptMaterials.find((entry) => entry.id === receiptMaterialId);
+    const material = receiptMaterial ? getMaterialByCode(receiptMaterial.materialCode) : undefined;
+    if (!receiptMaterial || !isRollTraceabilityMaterial(material)) return false;
+
+    if (range.some((roll) => receiptMaterial.rolls.includes(roll))) {
+      return false;
+    }
+
+    setReceiptMaterials((current) =>
+      current.map((entry) =>
+        entry.id === receiptMaterialId
+          ? {
+              ...entry,
+              rolls: mergeNumericCodes(entry.rolls, range),
+            }
+          : entry,
+      ),
+    );
+    return true;
+  };
+
   const resetReception = () => {
     setIsConfirmed(false);
     setActiveStep(1);
@@ -400,7 +432,7 @@ function ReceptionRoute() {
                     : activeStep === 1 && "Cargá remito, fecha y materiales incluidos."}
                   {!isConfirmed &&
                     activeStep === 2 &&
-                    "Agregá materiales y cargá la trazabilidad de cada uno."}
+                    "Cargá la trazabilidad correspondiente para cada material."}
                   {!isConfirmed &&
                     activeStep === 3 &&
                     "Revisá el resumen antes de confirmar el ingreso."}
@@ -477,6 +509,7 @@ function ReceptionRoute() {
                       onRemovePalet={removePalet}
                       onTogglePalet={togglePalet}
                       onAddBatchRange={addBatchRange}
+                      onAddRollRange={addRollRange}
                     />
                   )}
                   {activeStep === 3 && (
@@ -631,6 +664,7 @@ function TraceabilityStep({
   onRemovePalet,
   onTogglePalet,
   onAddBatchRange,
+  onAddRollRange,
 }: {
   remito: string;
   provider: string;
@@ -649,6 +683,7 @@ function TraceabilityStep({
     from: string,
     to: string,
   ) => boolean;
+  onAddRollRange: (receiptMaterialId: string, from: string, to: string) => boolean;
 }) {
   return (
     <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -663,6 +698,7 @@ function TraceabilityStep({
           onRemovePalet={onRemovePalet}
           onTogglePalet={onTogglePalet}
           onAddBatchRange={onAddBatchRange}
+          onAddRollRange={onAddRollRange}
         />
       </div>
 
@@ -695,20 +731,22 @@ function ConfirmedStep({
   const totalLots = getReceiptTotalLots(receiptMaterials);
   const totalBatches = getReceiptTotalBatches(receiptMaterials);
   const totalPalets = getReceiptTotalPalets(receiptMaterials);
+  const totalRolls = getReceiptTotalRolls(receiptMaterials);
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
+  const materialSummary = `${receiptMaterials.length} ${pluralize(
+    receiptMaterials.length,
+    "material",
+    "materiales",
+  )}`;
+  const traceParts = [
+    totalLots > 0 ? `${totalLots} ${pluralize(totalLots, "lote", "lotes")}` : "",
+    totalRolls > 0 ? `${totalRolls} ${pluralize(totalRolls, "rollo", "rollos")}` : "",
+  ].filter(Boolean);
   const traceSummary =
-    totalLots === 0
-      ? `${receiptMaterials.length} ${pluralize(
-          receiptMaterials.length,
-          "material",
-          "materiales",
-        )} sin lotes cargados`
-      : `${receiptMaterials.length} ${pluralize(
-          receiptMaterials.length,
-          "material",
-          "materiales",
-        )}, ${totalLots} ${pluralize(totalLots, "lote", "lotes")} registrados`;
+    traceParts.length === 0
+      ? `${materialSummary} sin trazabilidad cargada`
+      : `${materialSummary}, ${traceParts.join(", ")} registrados`;
 
   return (
     <div className="mx-auto flex min-h-[520px] max-w-3xl flex-col items-center justify-center py-10 text-center">
@@ -728,9 +766,10 @@ function ConfirmedStep({
         aprobación de Calidad.
       </p>
 
-      <div className="mt-8 grid w-full max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mt-8 grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-5">
         <LiveMetric label="Materiales" value={String(receiptMaterials.length)} />
         <LiveMetric label="Lotes" value={String(totalLots)} />
+        <LiveMetric label="Rollos" value={String(totalRolls)} />
         <LiveMetric label="Palets" value={String(totalPalets)} />
         <LiveMetric label="Batches" value={String(totalBatches)} />
       </div>
@@ -988,6 +1027,7 @@ function MaterialsTraceabilityForm({
   onRemovePalet,
   onTogglePalet,
   onAddBatchRange,
+  onAddRollRange,
 }: {
   receiptMaterials: ReceiptMaterial[];
   onToggleReceiptMaterial: (receiptMaterialId: string) => void;
@@ -1004,6 +1044,7 @@ function MaterialsTraceabilityForm({
     from: string,
     to: string,
   ) => boolean;
+  onAddRollRange: (receiptMaterialId: string, from: string, to: string) => boolean;
 }) {
   return (
     <section className="space-y-5">
@@ -1012,7 +1053,7 @@ function MaterialsTraceabilityForm({
           Trazabilidad por Material
         </div>
         <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
-          Completá los lotes, palets y batches correspondientes para cada material del remito.
+          Completá los datos de trazabilidad correspondientes para cada material del remito.
         </p>
       </div>
 
@@ -1031,6 +1072,7 @@ function MaterialsTraceabilityForm({
             onAddBatchRange={(lotId, paletId, from, to) =>
               onAddBatchRange(receiptMaterial.id, lotId, paletId, from, to)
             }
+            onAddRollRange={(from, to) => onAddRollRange(receiptMaterial.id, from, to)}
           />
         ))}
 
@@ -1058,6 +1100,7 @@ function ReceiptMaterialTraceCard({
   onRemovePalet,
   onTogglePalet,
   onAddBatchRange,
+  onAddRollRange,
 }: {
   receiptMaterial: ReceiptMaterial;
   onRemove?: () => void;
@@ -1069,8 +1112,10 @@ function ReceiptMaterialTraceCard({
   onRemovePalet: (lotId: string, paletId: string) => void;
   onTogglePalet: (lotId: string, paletId: string) => void;
   onAddBatchRange: (lotId: string, paletId: string, from: string, to: string) => boolean;
+  onAddRollRange: (from: string, to: string) => boolean;
 }) {
   const material = getMaterialByCode(receiptMaterial.materialCode);
+  const isRollMaterial = isRollTraceabilityMaterial(material);
   const totalPalets = getTotalPalets(receiptMaterial.lots);
   const totalBatches = getTotalBatches(receiptMaterial.lots);
 
@@ -1110,11 +1155,15 @@ function ReceiptMaterialTraceCard({
         </div>
 
         <div className="flex items-center justify-between gap-3 pl-10 sm:pl-0">
-          <MaterialTraceCountSummary
-            lots={receiptMaterial.lots.length}
-            palets={totalPalets}
-            batches={totalBatches}
-          />
+          {isRollMaterial ? (
+            <RollTraceCountSummary rolls={receiptMaterial.rolls.length} />
+          ) : (
+            <MaterialTraceCountSummary
+              lots={receiptMaterial.lots.length}
+              palets={totalPalets}
+              batches={totalBatches}
+            />
+          )}
           {onRemove ? (
             <Button
               type="button"
@@ -1132,18 +1181,22 @@ function ReceiptMaterialTraceCard({
 
       {receiptMaterial.expanded && (
         <div className="px-4 py-4 sm:px-5">
-          <LotTraceabilityForm
-            lots={receiptMaterial.lots}
-            title="Lotes del material"
-            description="Cargá cada lote de este material con sus palets y batches correspondientes."
-            onAddLot={onAddLot}
-            onRemoveLot={onRemoveLot}
-            onToggleLot={onToggleLot}
-            onAddPalet={onAddPalet}
-            onRemovePalet={onRemovePalet}
-            onTogglePalet={onTogglePalet}
-            onAddBatchRange={onAddBatchRange}
-          />
+          {isRollMaterial ? (
+            <RollTraceabilityForm rolls={receiptMaterial.rolls} onAddRollRange={onAddRollRange} />
+          ) : (
+            <LotTraceabilityForm
+              lots={receiptMaterial.lots}
+              title="Lotes del material"
+              description="Cargá cada lote de este material con sus palets y batches correspondientes."
+              onAddLot={onAddLot}
+              onRemoveLot={onRemoveLot}
+              onToggleLot={onToggleLot}
+              onAddPalet={onAddPalet}
+              onRemovePalet={onRemovePalet}
+              onTogglePalet={onTogglePalet}
+              onAddBatchRange={onAddBatchRange}
+            />
+          )}
         </div>
       )}
     </div>
@@ -1287,6 +1340,164 @@ function LotTraceabilityForm({
           />
         ) : null}
       </div>
+    </section>
+  );
+}
+
+function RollTraceabilityForm({
+  rolls,
+  onAddRollRange,
+}: {
+  rolls: string[];
+  onAddRollRange: (from: string, to: string) => boolean;
+}) {
+  const [rollFrom, setRollFrom] = useState("");
+  const [rollTo, setRollTo] = useState("");
+  const [rollRangeError, setRollRangeError] = useState<FieldError | undefined>();
+
+  const addRange = () => {
+    const from = rollFrom.trim();
+    const to = rollTo.trim();
+
+    if (!from || !to) {
+      setRollRangeError((current) =>
+        createFieldError("Completá el rollo inicial y el rollo final.", current),
+      );
+      return;
+    }
+
+    const start = parsePositiveInteger(from);
+    const end = parsePositiveInteger(to);
+
+    if (start === undefined || end === undefined) {
+      setRollRangeError((current) =>
+        createFieldError("Los rollos deben ser números mayores a cero.", current),
+      );
+      return;
+    }
+
+    if (end < start) {
+      setRollRangeError((current) =>
+        createFieldError("El rollo final debe ser mayor o igual al rollo inicial.", current),
+      );
+      return;
+    }
+
+    const range = createNumberRange(from, to);
+    const repeatedRolls = range.filter((roll) => rolls.includes(roll));
+    if (repeatedRolls.length > 0) {
+      setRollRangeError((current) =>
+        createFieldError(
+          `El rango incluye rollos ya cargados: ${formatRepeatedCodes(repeatedRolls)}.`,
+          current,
+        ),
+      );
+      return;
+    }
+
+    const wasAdded = onAddRollRange(rollFrom, rollTo);
+    if (!wasAdded) {
+      setRollRangeError((current) =>
+        createFieldError("No se pudo agregar el rango. Revisá los valores ingresados.", current),
+      );
+      return;
+    }
+
+    setRollFrom("");
+    setRollTo("");
+    setRollRangeError(undefined);
+  };
+
+  return (
+    <section className="space-y-5">
+      <div className="min-w-0">
+        <div className="text-[19px] font-semibold tracking-tight text-foreground sm:text-[21px]">
+          Rollos del material
+        </div>
+        <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-muted-foreground">
+          Cargá los rollos de este material por rango.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-border/80 bg-background/35 p-4">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+          Agregar rollos
+        </div>
+        <div
+          key={rollRangeError?.nonce}
+          className={cn(
+            "mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_24px_minmax(0,1fr)_160px] md:items-center",
+            rollRangeError && "reception-error-shake",
+          )}
+        >
+          <Input
+            value={rollFrom}
+            onChange={(event) => {
+              setRollFrom(event.target.value);
+              setRollRangeError(undefined);
+            }}
+            placeholder="Desde"
+            inputMode="numeric"
+            autoComplete="off"
+            aria-invalid={Boolean(rollRangeError)}
+            className={cn(
+              "reception-field h-10 text-[13px]",
+              rollRangeError && "reception-field-error",
+            )}
+          />
+          <ChevronRight className="hidden h-4 w-4 justify-self-center text-muted-foreground md:block" />
+          <Input
+            value={rollTo}
+            onChange={(event) => {
+              setRollTo(event.target.value);
+              setRollRangeError(undefined);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addRange();
+              }
+            }}
+            placeholder="Hasta"
+            inputMode="numeric"
+            autoComplete="off"
+            aria-invalid={Boolean(rollRangeError)}
+            className={cn(
+              "reception-field h-10 text-[13px]",
+              rollRangeError && "reception-field-error",
+            )}
+          />
+          <Button
+            type="button"
+            className="h-10 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
+            onClick={addRange}
+          >
+            <Plus className="h-4 w-4" />
+            Agregar
+          </Button>
+        </div>
+        <ValidationMessage error={rollRangeError} />
+      </div>
+
+      {rolls.length === 0 ? (
+        <EmptyTraceState
+          icon={Layers3}
+          title="Sin rollos"
+          message="Agregá el rango de rollos incluido en este material."
+          className="py-6"
+        />
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {rolls.map((roll) => (
+            <span
+              key={roll}
+              className="flex h-8 min-w-10 items-center justify-center rounded-md border border-border/80 bg-background/45 px-2.5 font-mono text-[12.5px] text-foreground"
+            >
+              {roll}
+            </span>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1728,6 +1939,17 @@ function MaterialTraceCountSummary({
   );
 }
 
+function RollTraceCountSummary({ rolls }: { rolls: number }) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-muted-foreground sm:justify-end">
+      <span>
+        <strong className="font-semibold text-foreground">{rolls}</strong>{" "}
+        {pluralize(rolls, "rollo", "rollos")}
+      </span>
+    </div>
+  );
+}
+
 function EmptyTraceState({
   icon: Icon = Layers3,
   title,
@@ -1792,6 +2014,8 @@ function MaterialsTraceabilitySummary({
   return (
     <div className="mt-4 space-y-4">
       {receiptMaterials.map((receiptMaterial) => {
+        const material = getMaterialByCode(receiptMaterial.materialCode);
+        const isRollMaterial = isRollTraceabilityMaterial(material);
         const totalPalets = getTotalPalets(receiptMaterial.lots);
         const totalBatches = getTotalBatches(receiptMaterial.lots);
 
@@ -1807,14 +2031,25 @@ function MaterialsTraceabilitySummary({
                   Recepción Material {receiptMaterial.materialCode}
                 </span>
               </div>
-              <span className="text-[12.5px] text-muted-foreground">
-                ({receiptMaterial.lots.length}{" "}
-                {pluralize(receiptMaterial.lots.length, "lote", "lotes")}, {totalPalets}{" "}
-                {pluralize(totalPalets, "palet", "palets")}, {totalBatches} batches)
-              </span>
+              {isRollMaterial ? (
+                <span className="text-[12.5px] text-muted-foreground">
+                  ({receiptMaterial.rolls.length}{" "}
+                  {pluralize(receiptMaterial.rolls.length, "rollo", "rollos")})
+                </span>
+              ) : (
+                <span className="text-[12.5px] text-muted-foreground">
+                  ({receiptMaterial.lots.length}{" "}
+                  {pluralize(receiptMaterial.lots.length, "lote", "lotes")}, {totalPalets}{" "}
+                  {pluralize(totalPalets, "palet", "palets")}, {totalBatches} batches)
+                </span>
+              )}
             </div>
 
-            <TraceabilitySummary lots={receiptMaterial.lots} />
+            {isRollMaterial ? (
+              <RollsTraceabilitySummary rolls={receiptMaterial.rolls} />
+            ) : (
+              <TraceabilitySummary lots={receiptMaterial.lots} />
+            )}
           </div>
         );
       })}
@@ -1896,6 +2131,29 @@ function TraceabilitySummary({ lots }: { lots: TraceLot[] }) {
   );
 }
 
+function RollsTraceabilitySummary({ rolls }: { rolls: string[] }) {
+  if (rolls.length === 0) {
+    return (
+      <div className="mt-4 rounded-md border border-dashed border-border/80 bg-background/30 px-3 py-3 text-[12.5px] text-muted-foreground">
+        Sin rollos registrados.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 flex flex-wrap gap-1.5">
+      {rolls.map((roll) => (
+        <span
+          key={roll}
+          className="flex h-7 min-w-8 items-center justify-center rounded-md border border-border/80 bg-background/45 px-2 font-mono text-[12px] text-foreground"
+        >
+          Rollo {roll}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function LiveTraceabilityPanel({
   remito,
   provider,
@@ -1908,6 +2166,7 @@ function LiveTraceabilityPanel({
   const totalLots = getReceiptTotalLots(receiptMaterials);
   const totalBatches = getReceiptTotalBatches(receiptMaterials);
   const totalPalets = getReceiptTotalPalets(receiptMaterials);
+  const totalRolls = getReceiptTotalRolls(receiptMaterials);
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
 
@@ -1938,6 +2197,7 @@ function LiveTraceabilityPanel({
       <div className="mt-4 grid grid-cols-2 gap-3">
         <LiveMetric label="Materiales" value={String(receiptMaterials.length)} />
         <LiveMetric label="Lotes" value={String(totalLots)} />
+        <LiveMetric label="Rollos" value={String(totalRolls)} />
         <LiveMetric label="Palets" value={String(totalPalets)} />
         <LiveMetric label="Batches" value={String(totalBatches)} />
       </div>
@@ -1946,6 +2206,9 @@ function LiveTraceabilityPanel({
 }
 
 function LiveMaterialSummary({ receiptMaterial }: { receiptMaterial: ReceiptMaterial }) {
+  const material = getMaterialByCode(receiptMaterial.materialCode);
+  const isRollMaterial = isRollTraceabilityMaterial(material);
+
   return (
     <div className="rounded-lg border border-border/80 bg-background/35 p-4">
       <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
@@ -1954,7 +2217,22 @@ function LiveMaterialSummary({ receiptMaterial }: { receiptMaterial: ReceiptMate
       </div>
 
       <div className="mt-4 border-t border-border/70 pt-4">
-        {receiptMaterial.lots.length === 0 ? (
+        {isRollMaterial ? (
+          receiptMaterial.rolls.length === 0 ? (
+            <div className="text-[12px] text-muted-foreground">Sin rollos registrados</div>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {receiptMaterial.rolls.map((roll) => (
+                <span
+                  key={roll}
+                  className="flex h-7 min-w-8 items-center justify-center rounded-md border border-border/80 bg-card/60 px-2 font-mono text-[12px] text-foreground"
+                >
+                  {roll}
+                </span>
+              ))}
+            </div>
+          )
+        ) : receiptMaterial.lots.length === 0 ? (
           <div className="text-[12px] text-muted-foreground">Sin lotes registrados</div>
         ) : (
           <div className="space-y-3">
@@ -2048,6 +2326,10 @@ function getMaterialByCode(code: string) {
   return materials.find((material) => material.code === code);
 }
 
+function isRollTraceabilityMaterial(material?: Material) {
+  return material?.traceability.length === 1 && material.traceability[0] === "Rollo";
+}
+
 function getReceiptProviderLabel(receiptMaterials: ReceiptMaterial[]) {
   const providers = Array.from(
     new Set(
@@ -2073,9 +2355,13 @@ function parsePositiveInteger(value: string) {
 }
 
 function createBatchRange(from: string, to: string) {
-  const start = Number.parseInt(from, 10);
-  const end = Number.parseInt(to, 10);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end < start) {
+  return createNumberRange(from, to);
+}
+
+function createNumberRange(from: string, to: string) {
+  const start = parsePositiveInteger(from);
+  const end = parsePositiveInteger(to);
+  if (start === undefined || end === undefined || end < start) {
     return [];
   }
 
@@ -2083,10 +2369,18 @@ function createBatchRange(from: string, to: string) {
 }
 
 function mergeBatches(current: string[], next: string[]) {
+  return mergeNumericCodes(current, next);
+}
+
+function mergeNumericCodes(current: string[], next: string[]) {
   return Array.from(new Set([...current, ...next])).sort((a, b) => Number(a) - Number(b));
 }
 
 function formatRepeatedBatches(batches: string[]) {
+  return formatRepeatedCodes(batches);
+}
+
+function formatRepeatedCodes(batches: string[]) {
   const visibleBatches = batches.slice(0, 5).join(", ");
   return batches.length > 5 ? `${visibleBatches} y ${batches.length - 5} más` : visibleBatches;
 }
@@ -2113,6 +2407,10 @@ function getReceiptTotalPalets(receiptMaterials: ReceiptMaterial[]) {
 
 function getReceiptTotalBatches(receiptMaterials: ReceiptMaterial[]) {
   return receiptMaterials.reduce((total, entry) => total + getTotalBatches(entry.lots), 0);
+}
+
+function getReceiptTotalRolls(receiptMaterials: ReceiptMaterial[]) {
+  return receiptMaterials.reduce((total, entry) => total + entry.rolls.length, 0);
 }
 
 function formatLotCode(lot: TraceLot) {
