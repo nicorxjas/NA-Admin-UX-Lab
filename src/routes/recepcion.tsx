@@ -732,6 +732,7 @@ function ConfirmedStep({
   const totalBatches = getReceiptTotalBatches(receiptMaterials);
   const totalPalets = getReceiptTotalPalets(receiptMaterials);
   const totalRolls = getReceiptTotalRolls(receiptMaterials);
+  const traceMetricCards = getReceiptTraceMetricCards(receiptMaterials);
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
   const materialSummary = `${receiptMaterials.length} ${pluralize(
@@ -766,12 +767,16 @@ function ConfirmedStep({
         aprobación de Calidad.
       </p>
 
-      <div className="mt-8 grid w-full max-w-3xl grid-cols-2 gap-3 sm:grid-cols-5">
-        <LiveMetric label="Materiales" value={String(receiptMaterials.length)} />
-        <LiveMetric label="Lotes" value={String(totalLots)} />
-        <LiveMetric label="Rollos" value={String(totalRolls)} />
-        <LiveMetric label="Palets" value={String(totalPalets)} />
-        <LiveMetric label="Batches" value={String(totalBatches)} />
+      <div
+        className="mt-8 grid w-full gap-3"
+        style={{
+          gridTemplateColumns: `repeat(${traceMetricCards.length}, minmax(0, 1fr))`,
+          maxWidth: getFinalMetricGridMaxWidth(traceMetricCards.length),
+        }}
+      >
+        {traceMetricCards.map((metric) => (
+          <LiveMetric key={metric.label} label={metric.label} value={metric.value} />
+        ))}
       </div>
 
       <div className="mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row">
@@ -2141,15 +2146,21 @@ function RollsTraceabilitySummary({ rolls }: { rolls: string[] }) {
   }
 
   return (
-    <div className="mt-4 flex flex-wrap gap-1.5">
-      {rolls.map((roll) => (
-        <span
-          key={roll}
-          className="flex h-7 min-w-8 items-center justify-center rounded-md border border-border/80 bg-background/45 px-2 font-mono text-[12px] text-foreground"
-        >
-          Rollo {roll}
-        </span>
-      ))}
+    <div className="mt-4">
+      <div className="flex items-center gap-2">
+        <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
+        <span className="font-mono text-[13.5px] font-semibold text-foreground">Rollos</span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {rolls.map((roll) => (
+          <span
+            key={roll}
+            className="flex h-7 min-w-8 items-center justify-center rounded-md border border-border/80 bg-background/45 px-2 font-mono text-[12px] text-foreground"
+          >
+            {roll}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
@@ -2163,10 +2174,7 @@ function LiveTraceabilityPanel({
   provider: string;
   receiptMaterials: ReceiptMaterial[];
 }) {
-  const totalLots = getReceiptTotalLots(receiptMaterials);
-  const totalBatches = getReceiptTotalBatches(receiptMaterials);
-  const totalPalets = getReceiptTotalPalets(receiptMaterials);
-  const totalRolls = getReceiptTotalRolls(receiptMaterials);
+  const traceMetricCards = getReceiptTraceMetricCards(receiptMaterials);
   const displayRemito = remito.trim() || "Sin remito";
   const displayProvider = provider || "Sin proveedor";
 
@@ -2194,13 +2202,18 @@ function LiveTraceabilityPanel({
         )}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <LiveMetric label="Materiales" value={String(receiptMaterials.length)} />
-        <LiveMetric label="Lotes" value={String(totalLots)} />
-        <LiveMetric label="Rollos" value={String(totalRolls)} />
-        <LiveMetric label="Palets" value={String(totalPalets)} />
-        <LiveMetric label="Batches" value={String(totalBatches)} />
-      </div>
+      {traceMetricCards.length > 0 ? (
+        <div
+          className={cn(
+            "mt-4 grid gap-3",
+            traceMetricCards.length === 1 ? "grid-cols-1" : "grid-cols-2",
+          )}
+        >
+          {traceMetricCards.map((metric) => (
+            <LiveMetric key={metric.label} label={metric.label} value={metric.value} />
+          ))}
+        </div>
+      ) : null}
     </aside>
   );
 }
@@ -2221,15 +2234,23 @@ function LiveMaterialSummary({ receiptMaterial }: { receiptMaterial: ReceiptMate
           receiptMaterial.rolls.length === 0 ? (
             <div className="text-[12px] text-muted-foreground">Sin rollos registrados</div>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {receiptMaterial.rolls.map((roll) => (
-                <span
-                  key={roll}
-                  className="flex h-7 min-w-8 items-center justify-center rounded-md border border-border/80 bg-card/60 px-2 font-mono text-[12px] text-foreground"
-                >
-                  {roll}
+            <div>
+              <div className="flex items-center gap-2">
+                <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
+                <span className="font-mono text-[13.5px] font-semibold text-foreground">
+                  Rollos
                 </span>
-              ))}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {receiptMaterial.rolls.map((roll) => (
+                  <span
+                    key={roll}
+                    className="flex h-7 min-w-8 items-center justify-center rounded-md border border-border/80 bg-card/60 px-2 font-mono text-[12px] text-foreground"
+                  >
+                    {roll}
+                  </span>
+                ))}
+              </div>
             </div>
           )
         ) : receiptMaterial.lots.length === 0 ? (
@@ -2328,6 +2349,51 @@ function getMaterialByCode(code: string) {
 
 function isRollTraceabilityMaterial(material?: Material) {
   return material?.traceability.length === 1 && material.traceability[0] === "Rollo";
+}
+
+function isLotTraceabilityMaterial(material?: Material) {
+  return Boolean(material?.traceability.includes("Lote"));
+}
+
+function getReceiptTraceMetricCards(receiptMaterials: ReceiptMaterial[]) {
+  if (receiptMaterials.length === 0) {
+    return [];
+  }
+
+  const hasLotMaterials = receiptMaterials.some((entry) =>
+    isLotTraceabilityMaterial(getMaterialByCode(entry.materialCode)),
+  );
+  const hasRollMaterials = receiptMaterials.some((entry) =>
+    isRollTraceabilityMaterial(getMaterialByCode(entry.materialCode)),
+  );
+  const metrics = {
+    materials: { label: "Materiales", value: String(receiptMaterials.length) },
+    lots: { label: "Lotes", value: String(getReceiptTotalLots(receiptMaterials)) },
+    palets: { label: "Palets", value: String(getReceiptTotalPalets(receiptMaterials)) },
+    batches: { label: "Batches", value: String(getReceiptTotalBatches(receiptMaterials)) },
+    rolls: { label: "Rollos", value: String(getReceiptTotalRolls(receiptMaterials)) },
+  };
+  const baseMetrics = [metrics.materials];
+
+  if (hasLotMaterials && hasRollMaterials) {
+    return [...baseMetrics, metrics.lots, metrics.palets, metrics.batches, metrics.rolls];
+  }
+
+  if (hasRollMaterials) {
+    return [...baseMetrics, metrics.rolls];
+  }
+
+  if (hasLotMaterials) {
+    return [...baseMetrics, metrics.lots, metrics.palets, metrics.batches];
+  }
+
+  return baseMetrics;
+}
+
+function getFinalMetricGridMaxWidth(metricCount: number) {
+  if (metricCount === 1) return "20rem";
+  if (metricCount === 4) return "42rem";
+  return "48rem";
 }
 
 function getReceiptProviderLabel(receiptMaterials: ReceiptMaterial[]) {
