@@ -348,7 +348,7 @@ function QualityRoute() {
                 asChild
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
                 title="Cerrar"
               >
                 <Link to="/recepcion">
@@ -365,7 +365,7 @@ function QualityRoute() {
           >
             <div className="flex-1 px-5 py-7 sm:px-8 lg:px-10">
               <div className="mx-auto grid max-w-6xl gap-6 lg:min-h-[640px] lg:grid-cols-2 lg:items-stretch">
-                <div className="min-w-0 overflow-hidden rounded-lg border border-border/80 bg-background/35 lg:min-h-[640px]">
+                <div className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/80 bg-background/35 lg:min-h-[640px]">
                   <QualityLookup
                     lotQuery={lotQuery}
                     materialCode={materialCode}
@@ -481,12 +481,12 @@ function QualityTracePanel({
 }) {
   if (!isLotRequested) {
     return (
-      <div className="p-4">
+      <div className="flex flex-1 p-4">
         <EmptyQualityState
           icon={FileSearch}
           title="Sin lote seleccionado"
           message="Ingresá el número de lote para ver los palets y batches recibidos."
-          className="min-h-[440px]"
+          className="min-h-[440px] flex-1"
         />
       </div>
     );
@@ -494,12 +494,12 @@ function QualityTracePanel({
 
   if (!lot) {
     return (
-      <div className="p-4">
+      <div className="flex flex-1 p-4">
         <EmptyQualityState
           icon={FileSearch}
           title="Lote no encontrado"
           message={`No hay recepción cargada para el lote ${lotQuery.trim()} de ${material?.code ?? "este material"}.`}
-          className="min-h-[440px]"
+          className="min-h-[440px] flex-1"
         />
       </div>
     );
@@ -573,7 +573,7 @@ function QualityPaletCard({
     >
       <button
         type="button"
-        className="grid w-full gap-3 px-4 py-3 text-left sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+        className="grid w-full gap-3 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
         onClick={onSelectPalet}
       >
         <div className="flex min-w-0 items-center gap-3">
@@ -638,7 +638,7 @@ function BatchTile({
       type="button"
       title={`Batch ${batch.code}`}
       className={cn(
-        "flex h-8 min-w-8 items-center justify-center rounded-md border px-2 font-mono text-[12px] font-semibold transition-colors",
+        "flex h-8 min-w-8 items-center justify-center rounded-md border px-2 font-mono text-[12px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
         status === "accepted" &&
           "border-emerald-400/70 bg-emerald-400/18 text-emerald-200 hover:bg-emerald-400/24",
         status === "rejected" && "border-red-400/75 bg-red-400/18 text-red-200 hover:bg-red-400/24",
@@ -707,7 +707,7 @@ function BatchDecisionPanel({
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="h-16 w-16 rounded-md border-border/80 bg-card/70"
+                  className="h-16 w-16 rounded-md border-border/80 bg-card/70 focus-visible:ring-0 focus-visible:ring-offset-0"
                   onClick={onMoveBackward}
                   disabled={!canMoveBackward}
                   title="Batch anterior"
@@ -734,7 +734,7 @@ function BatchDecisionPanel({
                   type="button"
                   variant="outline"
                   size="icon"
-                  className="h-16 w-16 rounded-md border-border/80 bg-card/70"
+                  className="h-16 w-16 rounded-md border-border/80 bg-card/70 focus-visible:ring-0 focus-visible:ring-offset-0"
                   onClick={onMoveForward}
                   disabled={!canMoveForward}
                   title="Batch siguiente"
@@ -747,7 +747,7 @@ function BatchDecisionPanel({
                 <Button
                   type="button"
                   className={cn(
-                    "h-20 w-20 rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 [&_svg]:!h-7 [&_svg]:!w-7",
+                    "h-20 w-20 rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 focus-visible:ring-0 focus-visible:ring-offset-0 [&_svg]:!h-7 [&_svg]:!w-7",
                     decision?.status === "accepted" && "ring-2 ring-emerald-200/80",
                   )}
                   onClick={() => onStatusChange("accepted")}
@@ -758,7 +758,7 @@ function BatchDecisionPanel({
                 <Button
                   type="button"
                   className={cn(
-                    "h-20 w-20 rounded-lg bg-red-500 text-white hover:bg-red-400 [&_svg]:!h-7 [&_svg]:!w-7",
+                    "h-20 w-20 rounded-lg bg-red-500 text-white hover:bg-red-400 focus-visible:ring-0 focus-visible:ring-offset-0 [&_svg]:!h-7 [&_svg]:!w-7",
                     decision?.status === "rejected" && "ring-2 ring-red-200/80",
                   )}
                   onClick={() => onStatusChange("rejected")}
@@ -797,11 +797,12 @@ function BatchDecisionPanel({
               <Button
                 type="button"
                 className={cn(
-                  "h-12 w-full rounded-lg border text-[13px] font-semibold transition-colors",
-                  isInspectionComplete
-                    ? "border-[#5E6AD2] bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
-                    : "border-border/80 bg-card/45 text-muted-foreground hover:bg-card/45",
-                  isInspectionFinished && "border-emerald-400 bg-emerald-500 text-emerald-950",
+                  "h-12 w-full rounded-lg border text-[13px] font-semibold transition-colors focus-visible:ring-0 focus-visible:ring-offset-0",
+                  isInspectionFinished
+                    ? "border-emerald-400 bg-emerald-500 text-emerald-950 hover:bg-emerald-400"
+                    : isInspectionComplete
+                      ? "border-[#5E6AD2] bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
+                      : "border-border/80 bg-card/45 text-muted-foreground hover:bg-card/45",
                 )}
                 disabled={!isInspectionComplete}
                 onClick={onFinishInspection}
@@ -809,11 +810,6 @@ function BatchDecisionPanel({
                 <ClipboardCheck className="h-4 w-4" />
                 {isInspectionFinished ? "Inspección terminada" : "Terminar inspección"}
               </Button>
-              {!isInspectionComplete ? (
-                <p className="mt-2 text-center text-[12px] text-muted-foreground">
-                  Tratá todos los batches para habilitar el cierre.
-                </p>
-              ) : null}
             </div>
           </div>
         ) : (
@@ -822,7 +818,7 @@ function BatchDecisionPanel({
               icon={ClipboardCheck}
               title="Sin batch activo"
               message="Seleccioná un lote y un palet para iniciar el control."
-              className="w-full"
+              className="h-full w-full"
             />
           </div>
         )}
@@ -856,7 +852,7 @@ function EmptyQualityState({
   return (
     <div
       className={cn(
-        "rounded-lg border border-dashed border-border/80 bg-background/25 px-4 py-10 text-center",
+        "flex flex-col items-center justify-center rounded-lg border border-dashed border-border/80 bg-background/25 px-4 py-10 text-center",
         className,
       )}
     >
