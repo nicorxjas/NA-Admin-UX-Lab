@@ -10,7 +10,16 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+  type ReactNode,
+  type RefObject,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -120,6 +129,7 @@ const frequentRejectionReasons = [
 ];
 
 function FinalControlRoute() {
+  const scanInputRef = useRef<HTMLInputElement>(null);
   const [scanQuery, setScanQuery] = useState("");
   const [lastScanAttempt, setLastScanAttempt] = useState("");
   const [currentTire, setCurrentTire] = useState<FinalControlTire | undefined>();
@@ -152,12 +162,34 @@ function FinalControlRoute() {
     setObservation(previousRecord?.observation ?? "");
   };
 
+  const focusScanInput = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        scanInputRef.current?.focus();
+        scanInputRef.current?.select();
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    focusScanInput();
+  }, [focusScanInput]);
+
+  const prepareNextScan = () => {
+    setScanQuery("");
+    setLastScanAttempt("");
+    setCurrentTire(undefined);
+    setObservation("");
+    setSelectedRejectionReasons([]);
+    focusScanInput();
+  };
+
   const commitDecision = (
     status: FinalControlStatus,
     rejectionReasons: string[] = [],
     observationOverride = observation,
   ) => {
-    if (!currentTire) return;
+    if (!currentTire) return false;
 
     const nextRecord: ShiftRecord = {
       id: `shift-${currentTire.id}-${Date.now()}`,
@@ -175,10 +207,14 @@ function FinalControlRoute() {
       nextRecord,
       ...records.filter((record) => record.tireCode !== currentTire.code),
     ]);
+
+    return true;
   };
 
   const acceptTire = () => {
-    commitDecision("accepted");
+    if (commitDecision("accepted")) {
+      prepareNextScan();
+    }
   };
 
   const openRejectDialog = () => {
@@ -190,9 +226,10 @@ function FinalControlRoute() {
 
   const confirmRejection = () => {
     const nextObservation = buildRejectedObservation(observation, selectedRejectionReasons);
-    setObservation(nextObservation);
-    commitDecision("rejected", selectedRejectionReasons, nextObservation);
-    setIsRejectDialogOpen(false);
+    if (commitDecision("rejected", selectedRejectionReasons, nextObservation)) {
+      setIsRejectDialogOpen(false);
+      prepareNextScan();
+    }
   };
 
   const toggleRejectionReason = (reason: string) => {
@@ -215,7 +252,7 @@ function FinalControlRoute() {
                   Control final
                 </div>
                 <h1 className="text-[24px] font-semibold tracking-tight text-foreground sm:text-[28px]">
-                  Nuevo control final
+                  Nueva Revisión de Neumático
                 </h1>
                 <p className="mt-1 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
                   Escanea el neumatico, revisa modelo y fecha de vulcanizado, y registra el
@@ -245,6 +282,7 @@ function FinalControlRoute() {
             <div className="flex-1 px-5 py-7 sm:px-8 lg:px-10">
               <div className="mx-auto grid max-w-6xl gap-6 lg:min-h-[640px] lg:grid-cols-2 lg:items-stretch">
                 <FinalControlPanel
+                  scanInputRef={scanInputRef}
                   scanQuery={scanQuery}
                   lastScanAttempt={lastScanAttempt}
                   tire={currentTire}
@@ -277,6 +315,7 @@ function FinalControlRoute() {
 }
 
 function FinalControlPanel({
+  scanInputRef,
   scanQuery,
   lastScanAttempt,
   tire,
@@ -288,6 +327,7 @@ function FinalControlPanel({
   onAccept,
   onReject,
 }: {
+  scanInputRef: RefObject<HTMLInputElement | null>;
   scanQuery: string;
   lastScanAttempt: string;
   tire?: FinalControlTire;
@@ -302,11 +342,12 @@ function FinalControlPanel({
   return (
     <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/80 bg-background/35 lg:min-h-[640px]">
       <div className="border-b border-border/70 px-4 py-4 sm:px-5">
-        <FieldBlock id="neumatico-control-final" label="Escaneo de neumatico">
+        <FieldBlock id="neumatico-control-final" label="Escaneo de Neumatico">
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A8B1FF]" />
               <Input
+                ref={scanInputRef}
                 id="neumatico-control-final"
                 value={scanQuery}
                 onChange={(event) => onScanQueryChange(event.target.value)}
@@ -611,7 +652,10 @@ function RejectReasonDialog({
 function FieldBlock({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return (
     <div>
-      <Label htmlFor={id} className="text-[12px] font-semibold text-muted-foreground">
+      <Label
+        htmlFor={id}
+        className="text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground"
+      >
         {label}
       </Label>
       <div className="mt-2">{children}</div>
