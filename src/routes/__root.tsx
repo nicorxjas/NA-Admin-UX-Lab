@@ -16,7 +16,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { MasterDataProvider } from "@/lib/master-store";
 
-const demoPaths = ["/recepcion", "/calidad"] as const;
+const demoPaths = ["/recepcion", "/calidad", "/control-final"] as const;
 const fallbackDemoPath = "/recepcion";
 
 function isDemoPath(pathname: string) {

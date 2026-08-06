@@ -1,0 +1,756 @@
+import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  Check,
+  CheckCircle2,
+  Clock,
+  FileSearch,
+  History,
+  Search,
+  ShieldCheck,
+  X,
+  XCircle,
+} from "lucide-react";
+import { useMemo, useState, type ComponentType, type ReactNode } from "react";
+
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
+
+export const Route = createFileRoute("/control-final")({
+  component: FinalControlRoute,
+});
+
+type FinalControlStatus = "accepted" | "rejected";
+
+type FinalControlTire = {
+  id: string;
+  code: string;
+  number: string;
+  model: string;
+  vulcanizedAt: string;
+};
+
+type ShiftRecord = {
+  id: string;
+  tireCode: string;
+  tireNumber: string;
+  model: string;
+  vulcanizedAt: string;
+  inspectedAt: string;
+  status: FinalControlStatus;
+  observation: string;
+  rejectionReasons: string[];
+};
+
+const finalControlTires: FinalControlTire[] = [
+  {
+    id: "tire-014",
+    code: "NEU-260805-014",
+    number: "014",
+    model: "205/55 R16 Carrera Urbana",
+    vulcanizedAt: "2026-08-05T06:42:00",
+  },
+  {
+    id: "tire-015",
+    code: "NEU-260805-015",
+    number: "015",
+    model: "195/65 R15 Carrera Plus",
+    vulcanizedAt: "2026-08-05T07:18:00",
+  },
+  {
+    id: "tire-016",
+    code: "NEU-260805-016",
+    number: "016",
+    model: "215/60 R16 Ruta Reforzada",
+    vulcanizedAt: "2026-08-05T07:46:00",
+  },
+  {
+    id: "tire-017",
+    code: "NEU-260805-017",
+    number: "017",
+    model: "225/45 R17 Sport",
+    vulcanizedAt: "2026-08-05T08:21:00",
+  },
+];
+
+const initialShiftHistory: ShiftRecord[] = [
+  {
+    id: "shift-012",
+    tireCode: "NEU-260805-012",
+    tireNumber: "012",
+    model: "205/55 R16 Carrera Urbana",
+    vulcanizedAt: "2026-08-05T06:05:00",
+    inspectedAt: "2026-08-05T08:48:00",
+    status: "accepted",
+    observation: "Control visual sin observaciones.",
+    rejectionReasons: [],
+  },
+  {
+    id: "shift-013",
+    tireCode: "NEU-260805-013",
+    tireNumber: "013",
+    model: "195/65 R15 Carrera Plus",
+    vulcanizedAt: "2026-08-05T06:24:00",
+    inspectedAt: "2026-08-05T08:56:00",
+    status: "rejected",
+    observation: "Motivos frecuentes: Marcado ilegible",
+    rejectionReasons: ["Marcado ilegible"],
+  },
+];
+
+const frequentRejectionReasons = [
+  "Banda descentrada",
+  "Corte lateral",
+  "Burbuja o ampolla",
+  "Falta de material",
+  "Marcado ilegible",
+  "Despegue visible",
+  "Medida fuera de especificacion",
+  "Terminacion irregular",
+];
+
+function FinalControlRoute() {
+  const [scanQuery, setScanQuery] = useState("");
+  const [lastScanAttempt, setLastScanAttempt] = useState("");
+  const [currentTire, setCurrentTire] = useState<FinalControlTire | undefined>();
+  const [observation, setObservation] = useState("");
+  const [shiftHistory, setShiftHistory] = useState<ShiftRecord[]>(initialShiftHistory);
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  const [selectedRejectionReasons, setSelectedRejectionReasons] = useState<string[]>([]);
+
+  const currentRecord = useMemo(
+    () => shiftHistory.find((record) => record.tireCode === currentTire?.code),
+    [currentTire, shiftHistory],
+  );
+  const totals = useMemo(() => getShiftTotals(shiftHistory), [shiftHistory]);
+
+  const scanTire = (value?: string) => {
+    const nextQuery = normalizeScanCode(value ?? scanQuery);
+    if (!nextQuery) return;
+
+    const foundTire = findTireByCode(nextQuery);
+    setScanQuery(nextQuery);
+    setLastScanAttempt(nextQuery);
+    setCurrentTire(foundTire);
+
+    if (!foundTire) {
+      setObservation("");
+      return;
+    }
+
+    const previousRecord = shiftHistory.find((record) => record.tireCode === foundTire.code);
+    setObservation(previousRecord?.observation ?? "");
+  };
+
+  const commitDecision = (
+    status: FinalControlStatus,
+    rejectionReasons: string[] = [],
+    observationOverride = observation,
+  ) => {
+    if (!currentTire) return;
+
+    const nextRecord: ShiftRecord = {
+      id: `shift-${currentTire.id}-${Date.now()}`,
+      tireCode: currentTire.code,
+      tireNumber: currentTire.number,
+      model: currentTire.model,
+      vulcanizedAt: currentTire.vulcanizedAt,
+      inspectedAt: new Date().toISOString(),
+      status,
+      observation: observationOverride.trim(),
+      rejectionReasons,
+    };
+
+    setShiftHistory((records) => [
+      nextRecord,
+      ...records.filter((record) => record.tireCode !== currentTire.code),
+    ]);
+  };
+
+  const acceptTire = () => {
+    commitDecision("accepted");
+  };
+
+  const openRejectDialog = () => {
+    if (!currentTire) return;
+
+    setSelectedRejectionReasons(currentRecord?.rejectionReasons ?? []);
+    setIsRejectDialogOpen(true);
+  };
+
+  const confirmRejection = () => {
+    const nextObservation = buildRejectedObservation(observation, selectedRejectionReasons);
+    setObservation(nextObservation);
+    commitDecision("rejected", selectedRejectionReasons, nextObservation);
+    setIsRejectDialogOpen(false);
+  };
+
+  const toggleRejectionReason = (reason: string) => {
+    setSelectedRejectionReasons((reasons) =>
+      reasons.includes(reason)
+        ? reasons.filter((currentReason) => currentReason !== reason)
+        : [...reasons, reason],
+    );
+  };
+
+  return (
+    <section className="min-h-screen bg-background px-4 py-5 text-foreground sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-6xl items-center justify-center">
+        <div className="flex min-h-[calc(100vh-2.5rem)] w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-2xl shadow-black/35">
+          <header className="border-b border-border/70 px-5 py-5 sm:px-8">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#A8B1FF]">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Control final
+                </div>
+                <h1 className="text-[24px] font-semibold tracking-tight text-foreground sm:text-[28px]">
+                  Nuevo control final
+                </h1>
+                <p className="mt-1 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
+                  Escanea el neumatico, revisa modelo y fecha de vulcanizado, y registra el
+                  resultado del control.
+                </p>
+              </div>
+
+              <Button
+                asChild
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
+                title="Cerrar"
+              >
+                <Link to="/recepcion">
+                  <X className="h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          </header>
+
+          <form
+            className="flex flex-1 flex-col"
+            autoComplete="off"
+            onSubmit={(event) => event.preventDefault()}
+          >
+            <div className="flex-1 px-5 py-7 sm:px-8 lg:px-10">
+              <div className="mx-auto grid max-w-6xl gap-6 lg:min-h-[640px] lg:grid-cols-2 lg:items-stretch">
+                <FinalControlPanel
+                  scanQuery={scanQuery}
+                  lastScanAttempt={lastScanAttempt}
+                  tire={currentTire}
+                  currentRecord={currentRecord}
+                  observation={observation}
+                  onScanQueryChange={setScanQuery}
+                  onScan={scanTire}
+                  onObservationChange={setObservation}
+                  onAccept={acceptTire}
+                  onReject={openRejectDialog}
+                />
+
+                <ShiftHistoryPanel records={shiftHistory} totals={totals} />
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <RejectReasonDialog
+        open={isRejectDialogOpen}
+        tire={currentTire}
+        selectedReasons={selectedRejectionReasons}
+        onOpenChange={setIsRejectDialogOpen}
+        onToggleReason={toggleRejectionReason}
+        onConfirm={confirmRejection}
+      />
+    </section>
+  );
+}
+
+function FinalControlPanel({
+  scanQuery,
+  lastScanAttempt,
+  tire,
+  currentRecord,
+  observation,
+  onScanQueryChange,
+  onScan,
+  onObservationChange,
+  onAccept,
+  onReject,
+}: {
+  scanQuery: string;
+  lastScanAttempt: string;
+  tire?: FinalControlTire;
+  currentRecord?: ShiftRecord;
+  observation: string;
+  onScanQueryChange: (value: string) => void;
+  onScan: (value?: string) => void;
+  onObservationChange: (value: string) => void;
+  onAccept: () => void;
+  onReject: () => void;
+}) {
+  return (
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/80 bg-background/35 lg:min-h-[640px]">
+      <div className="border-b border-border/70 px-4 py-4 sm:px-5">
+        <FieldBlock id="neumatico-control-final" label="Escaneo de neumatico">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A8B1FF]" />
+              <Input
+                id="neumatico-control-final"
+                value={scanQuery}
+                onChange={(event) => onScanQueryChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    onScan();
+                  }
+                }}
+                placeholder="Ej: NEU-260805-014"
+                autoComplete="off"
+                className="reception-field h-11 pl-9 font-mono text-[13.5px]"
+              />
+            </div>
+            <Button
+              type="button"
+              className="h-11 rounded-lg bg-[#5E6AD2] px-5 text-white hover:bg-[#6875E8] focus-visible:ring-0 focus-visible:ring-offset-0"
+              onClick={() => onScan()}
+            >
+              Escanear
+            </Button>
+          </div>
+        </FieldBlock>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
+          Prueba con
+          {finalControlTires.slice(0, 3).map((sampleTire) => (
+            <button
+              key={sampleTire.code}
+              type="button"
+              onClick={() => onScan(sampleTire.code)}
+              className="rounded-md border border-border/70 bg-card px-2 py-0.5 font-mono text-[11.5px] text-foreground/90 transition-colors hover:bg-accent"
+            >
+              {sampleTire.code}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col px-5 py-6">
+        <TireDataPanel
+          tire={tire}
+          lastScanAttempt={lastScanAttempt}
+          currentRecord={currentRecord}
+        />
+
+        <div className="mt-6">
+          <div className="grid grid-cols-2 gap-4">
+            <Button
+              type="button"
+              className={cn(
+                "h-20 w-full rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 focus-visible:ring-0 focus-visible:ring-offset-0 [&_svg]:!h-7 [&_svg]:!w-7",
+                currentRecord?.status === "accepted" && "ring-2 ring-emerald-200/80",
+              )}
+              disabled={!tire}
+              onClick={onAccept}
+              title="Aceptar neumatico"
+            >
+              <Check />
+            </Button>
+            <Button
+              type="button"
+              className={cn(
+                "h-20 w-full rounded-lg bg-red-500 text-white hover:bg-red-400 focus-visible:ring-0 focus-visible:ring-offset-0 [&_svg]:!h-7 [&_svg]:!w-7",
+                currentRecord?.status === "rejected" && "ring-2 ring-red-200/80",
+              )}
+              disabled={!tire}
+              onClick={onReject}
+              title="Rechazar neumatico"
+            >
+              <XCircle />
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <Label
+            htmlFor="observaciones-control-final"
+            className="text-[12px] font-semibold text-muted-foreground"
+          >
+            Observaciones
+          </Label>
+          <Textarea
+            id="observaciones-control-final"
+            value={observation}
+            onChange={(event) => onObservationChange(event.target.value)}
+            placeholder="Observaciones del control"
+            disabled={!tire}
+            className="reception-field mt-2 min-h-32 resize-none text-[13px]"
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TireDataPanel({
+  tire,
+  lastScanAttempt,
+  currentRecord,
+}: {
+  tire?: FinalControlTire;
+  lastScanAttempt: string;
+  currentRecord?: ShiftRecord;
+}) {
+  if (!lastScanAttempt) {
+    return (
+      <EmptyFinalControlState
+        icon={FileSearch}
+        title="Sin neumatico escaneado"
+        message="Escanea el codigo del neumatico para cargar sus datos de vulcanizado."
+      />
+    );
+  }
+
+  if (!tire) {
+    return (
+      <EmptyFinalControlState
+        icon={FileSearch}
+        title="Neumatico no encontrado"
+        message={`No hay datos cargados para ${lastScanAttempt}. Verifica el codigo escaneado.`}
+      />
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/80 bg-card/65">
+      <div className="border-b border-border/70 px-4 py-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground">
+              Neumatico
+            </div>
+            <div className="mt-1 font-mono text-[22px] font-semibold tracking-tight text-foreground">
+              {tire.code}
+            </div>
+          </div>
+          <StatusBadge status={currentRecord?.status} />
+        </div>
+      </div>
+
+      <div className="grid gap-4 px-4 py-4 sm:grid-cols-2">
+        <DataItem label="Modelo" value={tire.model} />
+        <DataItem label="Fecha de vulcanizado" value={formatDateTime(tire.vulcanizedAt)} mono />
+      </div>
+    </div>
+  );
+}
+
+function ShiftHistoryPanel({
+  records,
+  totals,
+}: {
+  records: ShiftRecord[];
+  totals: Record<FinalControlStatus, number>;
+}) {
+  return (
+    <aside className="flex min-w-0 lg:min-h-[640px]">
+      <div className="flex w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-background/35 lg:min-h-[640px]">
+        <div className="border-b border-border/70 px-4 py-4 sm:px-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground">
+              <History className="h-4 w-4 shrink-0 text-[#A8B1FF]" />
+              Historial del turno
+            </div>
+            <div className="flex items-center gap-2 text-[11.5px]">
+              <span className="rounded-md border border-emerald-400/40 bg-emerald-400/12 px-2 py-0.5 font-medium text-emerald-200">
+                {totals.accepted} OK
+              </span>
+              <span className="rounded-md border border-red-400/50 bg-red-400/14 px-2 py-0.5 font-medium text-red-200">
+                {totals.rejected} Rech.
+              </span>
+            </div>
+          </div>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Numero de neumatico, hora y estado registrado.
+          </p>
+        </div>
+
+        {records.length > 0 ? (
+          <div className="linear-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+            <div className="space-y-2">
+              {records.map((record) => (
+                <HistoryRow key={record.id} record={record} />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-1 p-4">
+            <EmptyFinalControlState
+              icon={Clock}
+              title="Sin controles en el turno"
+              message="Los neumaticos aceptados o rechazados apareceran aca."
+              className="flex-1"
+            />
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function HistoryRow({ record }: { record: ShiftRecord }) {
+  return (
+    <div className="rounded-lg border border-border/80 bg-card/65 px-4 py-3">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="font-mono text-[13.5px] font-semibold text-foreground">
+              {record.tireCode}
+            </span>
+          </div>
+          <div className="mt-1 truncate text-[12px] text-muted-foreground">{record.model}</div>
+        </div>
+
+        <div className="flex items-center gap-2 sm:justify-end">
+          <span className="flex items-center gap-1 font-mono text-[12px] text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" />
+            {formatClockTime(record.inspectedAt)}
+          </span>
+          <StatusBadge status={record.status} compact />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RejectReasonDialog({
+  open,
+  tire,
+  selectedReasons,
+  onOpenChange,
+  onToggleReason,
+  onConfirm,
+}: {
+  open: boolean;
+  tire?: FinalControlTire;
+  selectedReasons: string[];
+  onOpenChange: (open: boolean) => void;
+  onToggleReason: (reason: string) => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl border-border/80 bg-card p-0 shadow-2xl shadow-black/40">
+        <div className="border-b border-border/70 px-6 py-5">
+          <DialogHeader>
+            <DialogTitle className="text-[18px]">Motivos frecuentes de rechazo</DialogTitle>
+            <DialogDescription>
+              {tire
+                ? `Selecciona uno o mas motivos para rechazar el neumatico ${tire.code}.`
+                : "Selecciona uno o mas motivos de rechazo."}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+
+        <div className="grid gap-2 px-6 py-5 sm:grid-cols-2">
+          {frequentRejectionReasons.map((reason) => {
+            const selected = selectedReasons.includes(reason);
+
+            return (
+              <button
+                key={reason}
+                type="button"
+                onClick={() => onToggleReason(reason)}
+                className={cn(
+                  "min-h-12 rounded-lg border px-3 py-2 text-left text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                  selected
+                    ? "border-red-300/80 bg-red-400/18 text-red-100"
+                    : "border-border/80 bg-background/45 text-foreground hover:border-red-300/60 hover:bg-red-400/10",
+                )}
+              >
+                {reason}
+              </button>
+            );
+          })}
+        </div>
+
+        <DialogFooter className="border-t border-border/70 px-6 py-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-10 border-border/80 bg-background/55 focus-visible:ring-0 focus-visible:ring-offset-0"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            className="h-10 bg-red-500 text-white hover:bg-red-400 focus-visible:ring-0 focus-visible:ring-offset-0"
+            onClick={onConfirm}
+          >
+            <XCircle className="h-4 w-4" />
+            Rechazar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FieldBlock({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+  return (
+    <div>
+      <Label htmlFor={id} className="text-[12px] font-semibold text-muted-foreground">
+        {label}
+      </Label>
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
+function DataItem({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div>
+      <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        {label}
+      </div>
+      <div
+        className={cn(
+          "mt-1 min-w-0 text-[14px] font-medium text-foreground",
+          mono && "font-mono text-[13px]",
+        )}
+        title={value}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function EmptyFinalControlState({
+  icon: Icon,
+  title,
+  message,
+  className,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  title: string;
+  message: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex min-h-56 flex-col items-center justify-center rounded-lg border border-dashed border-border/80 bg-background/25 px-4 py-10 text-center",
+        className,
+      )}
+    >
+      <Icon className="mx-auto h-7 w-7 text-[#A8B1FF]" />
+      <div className="mt-4 text-[14px] font-semibold text-foreground">{title}</div>
+      <p className="mx-auto mt-2 max-w-sm text-[12.5px] leading-relaxed text-muted-foreground">
+        {message}
+      </p>
+    </div>
+  );
+}
+
+function StatusBadge({ status, compact }: { status?: FinalControlStatus; compact?: boolean }) {
+  if (status === "accepted") {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded-md border border-emerald-400/50 bg-emerald-400/12 px-2 py-0.5 font-medium text-emerald-200",
+          compact ? "text-[10.5px]" : "text-[11px]",
+        )}
+      >
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Aprobado
+      </span>
+    );
+  }
+
+  if (status === "rejected") {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded-md border border-red-400/60 bg-red-400/14 px-2 py-0.5 font-medium text-red-200",
+          compact ? "text-[10.5px]" : "text-[11px]",
+        )}
+      >
+        <XCircle className="h-3.5 w-3.5" />
+        Rechazado
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        "rounded-md border border-border/80 bg-background/40 px-2 py-0.5 font-medium text-muted-foreground",
+        compact ? "text-[10.5px]" : "text-[11px]",
+      )}
+    >
+      Pendiente
+    </span>
+  );
+}
+
+function findTireByCode(code: string) {
+  const normalizedCode = normalizeScanCode(code);
+  return finalControlTires.find((tire) => normalizeScanCode(tire.code) === normalizedCode);
+}
+
+function normalizeScanCode(value: string) {
+  return value.trim().replace(/\s+/g, "-").toUpperCase();
+}
+
+function buildRejectedObservation(observation: string, reasons: string[]) {
+  const baseObservation = observation.trim();
+  if (reasons.length === 0) return baseObservation;
+
+  const reasonsText = `Motivos frecuentes: ${reasons.join(", ")}`;
+  if (!baseObservation) return reasonsText;
+  if (baseObservation.includes(reasonsText)) return baseObservation;
+
+  return `${baseObservation}\n${reasonsText}`;
+}
+
+function getShiftTotals(records: ShiftRecord[]) {
+  return records.reduce(
+    (totals, record) => {
+      totals[record.status] += 1;
+      return totals;
+    },
+    { accepted: 0, rejected: 0 } satisfies Record<FinalControlStatus, number>,
+  );
+}
+
+function formatDateTime(value: string) {
+  const [datePart, timePart = ""] = value.split("T");
+  const [year, month, day] = datePart.split("-");
+  const [hour = "", minute = ""] = timePart.split(":");
+  if (!year || !month || !day || !hour || !minute) return value;
+
+  return `${day}/${month}/${year} ${hour}:${minute}`;
+}
+
+function formatClockTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleTimeString("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}

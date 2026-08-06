@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VulcanizadoRouteImport } from './routes/vulcanizado'
 import { Route as RecepcionRouteImport } from './routes/recepcion'
+import { Route as ControlFinalRouteImport } from './routes/control-final'
 import { Route as CalidadRouteImport } from './routes/calidad'
 import { Route as BandasRouteImport } from './routes/bandas'
 import { Route as IndexRouteImport } from './routes/index'
@@ -27,6 +28,11 @@ const VulcanizadoRoute = VulcanizadoRouteImport.update({
 const RecepcionRoute = RecepcionRouteImport.update({
   id: '/recepcion',
   path: '/recepcion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ControlFinalRoute = ControlFinalRouteImport.update({
+  id: '/control-final',
+  path: '/control-final',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CalidadRoute = CalidadRouteImport.update({
@@ -69,6 +75,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/bandas': typeof BandasRoute
   '/calidad': typeof CalidadRoute
+  '/control-final': typeof ControlFinalRoute
   '/recepcion': typeof RecepcionRoute
   '/vulcanizado': typeof VulcanizadoRoute
   '/maestros/$masterKey': typeof MaestrosMasterKeyRoute
@@ -80,6 +87,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/bandas': typeof BandasRoute
   '/calidad': typeof CalidadRoute
+  '/control-final': typeof ControlFinalRoute
   '/recepcion': typeof RecepcionRoute
   '/vulcanizado': typeof VulcanizadoRoute
   '/maestros/$masterKey': typeof MaestrosMasterKeyRoute
@@ -92,6 +100,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/bandas': typeof BandasRoute
   '/calidad': typeof CalidadRoute
+  '/control-final': typeof ControlFinalRoute
   '/recepcion': typeof RecepcionRoute
   '/vulcanizado': typeof VulcanizadoRoute
   '/maestros/$masterKey': typeof MaestrosMasterKeyRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/'
     | '/bandas'
     | '/calidad'
+    | '/control-final'
     | '/recepcion'
     | '/vulcanizado'
     | '/maestros/$masterKey'
@@ -116,6 +126,7 @@ export interface FileRouteTypes {
     | '/'
     | '/bandas'
     | '/calidad'
+    | '/control-final'
     | '/recepcion'
     | '/vulcanizado'
     | '/maestros/$masterKey'
@@ -127,6 +138,7 @@ export interface FileRouteTypes {
     | '/'
     | '/bandas'
     | '/calidad'
+    | '/control-final'
     | '/recepcion'
     | '/vulcanizado'
     | '/maestros/$masterKey'
@@ -139,6 +151,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BandasRoute: typeof BandasRoute
   CalidadRoute: typeof CalidadRoute
+  ControlFinalRoute: typeof ControlFinalRoute
   RecepcionRoute: typeof RecepcionRoute
   VulcanizadoRoute: typeof VulcanizadoRoute
   MaestrosMasterKeyRoute: typeof MaestrosMasterKeyRoute
@@ -161,6 +174,13 @@ declare module '@tanstack/react-router' {
       path: '/recepcion'
       fullPath: '/recepcion'
       preLoaderRoute: typeof RecepcionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/control-final': {
+      id: '/control-final'
+      path: '/control-final'
+      fullPath: '/control-final'
+      preLoaderRoute: typeof ControlFinalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/calidad': {
@@ -219,6 +239,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BandasRoute: BandasRoute,
   CalidadRoute: CalidadRoute,
+  ControlFinalRoute: ControlFinalRoute,
   RecepcionRoute: RecepcionRoute,
   VulcanizadoRoute: VulcanizadoRoute,
   MaestrosMasterKeyRoute: MaestrosMasterKeyRoute,
