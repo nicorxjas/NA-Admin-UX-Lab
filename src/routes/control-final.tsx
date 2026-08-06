@@ -23,6 +23,7 @@ import {
 } from "react";
 
 import { Button } from "@/components/ui/button";
+import { RfidScanModal } from "@/components/hmi/RfidScanModal";
 import {
   Dialog,
   DialogContent,
@@ -146,6 +147,7 @@ function FinalControlRoute() {
   const [scanQuery, setScanQuery] = useState("");
   const [lastScanAttempt, setLastScanAttempt] = useState("");
   const [currentTire, setCurrentTire] = useState<FinalControlTire | undefined>();
+  const [authorizedOperator, setAuthorizedOperator] = useState<string | undefined>();
   const [observation, setObservation] = useState("");
   const [shiftHistory, setShiftHistory] = useState<ShiftRecord[]>(initialShiftHistory);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
@@ -156,6 +158,7 @@ function FinalControlRoute() {
     [currentTire, shiftHistory],
   );
   const totals = useMemo(() => getShiftTotals(shiftHistory), [shiftHistory]);
+  const isAwaitingFinalAuth = !authorizedOperator;
 
   useEffect(() => {
     setTheme(getStoredTheme() ?? "dark");
@@ -201,54 +204,57 @@ function FinalControlRoute() {
     focusScanInput();
   }, [focusScanInput]);
 
-  const prepareNextScan = () => {
+  const prepareNextScan = useCallback(() => {
     setScanQuery("");
     setLastScanAttempt("");
     setCurrentTire(undefined);
     setObservation("");
     setSelectedRejectionReasons([]);
     focusScanInput();
-  };
+  }, [focusScanInput]);
 
-  const commitDecision = (
-    status: FinalControlStatus,
-    rejectionReasons: string[] = [],
-    observationOverride = observation,
-  ) => {
-    if (!currentTire) return false;
+  const commitDecision = useCallback(
+    (
+      status: FinalControlStatus,
+      rejectionReasons: string[] = [],
+      observationOverride = observation,
+    ) => {
+      if (!currentTire) return false;
 
-    const nextRecord: ShiftRecord = {
-      id: `shift-${currentTire.id}-${Date.now()}`,
-      tireCode: currentTire.code,
-      tireNumber: currentTire.number,
-      model: currentTire.model,
-      vulcanizedAt: currentTire.vulcanizedAt,
-      inspectedAt: new Date().toISOString(),
-      status,
-      observation: observationOverride.trim(),
-      rejectionReasons,
-    };
+      const nextRecord: ShiftRecord = {
+        id: `shift-${currentTire.id}-${Date.now()}`,
+        tireCode: currentTire.code,
+        tireNumber: currentTire.number,
+        model: currentTire.model,
+        vulcanizedAt: currentTire.vulcanizedAt,
+        inspectedAt: new Date().toISOString(),
+        status,
+        observation: observationOverride.trim(),
+        rejectionReasons,
+      };
 
-    setShiftHistory((records) => [
-      nextRecord,
-      ...records.filter((record) => record.tireCode !== currentTire.code),
-    ]);
+      setShiftHistory((records) => [
+        nextRecord,
+        ...records.filter((record) => record.tireCode !== currentTire.code),
+      ]);
 
-    return true;
-  };
+      return true;
+    },
+    [currentTire, observation],
+  );
 
-  const acceptTire = () => {
+  const acceptTire = useCallback(() => {
     if (commitDecision("accepted")) {
       prepareNextScan();
     }
-  };
+  }, [commitDecision, prepareNextScan]);
 
-  const openRejectDialog = () => {
+  const openRejectDialog = useCallback(() => {
     if (!currentTire) return;
 
     setSelectedRejectionReasons(currentRecord?.rejectionReasons ?? []);
     setIsRejectDialogOpen(true);
-  };
+  }, [currentRecord, currentTire]);
 
   const confirmRejection = () => {
     const nextObservation = buildRejectedObservation(observation, selectedRejectionReasons);
@@ -270,6 +276,35 @@ function FinalControlRoute() {
     setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
   };
 
+  const handleFinalAuth = (operator: string) => {
+    setAuthorizedOperator(operator);
+    focusScanInput();
+  };
+
+  useEffect(() => {
+    if (!currentTire || isRejectDialogOpen || isAwaitingFinalAuth) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (isFinalControlShortcutBlocked(event.target)) return;
+
+      const normalizedKey = event.key.toLowerCase();
+      if (normalizedKey !== "a" && normalizedKey !== "r") return;
+
+      event.preventDefault();
+
+      if (normalizedKey === "a") {
+        acceptTire();
+        return;
+      }
+
+      openRejectDialog();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [currentTire, isAwaitingFinalAuth, isRejectDialogOpen, acceptTire, openRejectDialog]);
+
   return (
     <section className="min-h-screen bg-background px-4 py-5 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-6xl items-center justify-center">
@@ -284,7 +319,7 @@ function FinalControlRoute() {
                 <h1 className="text-[24px] font-semibold tracking-tight text-foreground sm:text-[28px]">
                   Nueva Revisión de Neumático
                 </h1>
-                <p className="mt-1 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
+                <p className="mt-1 text-[13.5px] leading-relaxed text-muted-foreground">
                   Escanea el neumatico, revisa modelo y fecha de vulcanizado, y registra el
                   resultado del control.
                 </p>
@@ -300,25 +335,38 @@ function FinalControlRoute() {
             onSubmit={(event) => event.preventDefault()}
           >
             <div className="flex-1 px-5 py-7 sm:px-8 lg:px-10">
-              <div className="mx-auto grid max-w-6xl gap-6 lg:min-h-[640px] lg:grid-cols-2 lg:items-stretch">
-                <FinalControlPanel
-                  scanInputRef={scanInputRef}
-                  scanQuery={scanQuery}
-                  lastScanAttempt={lastScanAttempt}
-                  tire={currentTire}
-                  currentRecord={currentRecord}
-                  observation={observation}
-                  onScanQueryChange={setScanQuery}
-                  onScan={scanTire}
-                  onObservationChange={setObservation}
-                  onAccept={acceptTire}
-                  onReject={openRejectDialog}
-                />
+              {isAwaitingFinalAuth ? (
+                <LockedFinalControlStart />
+              ) : (
+                <div className="mx-auto grid max-w-6xl gap-6 lg:min-h-[640px] lg:grid-cols-2 lg:items-stretch">
+                  <FinalControlPanel
+                    scanInputRef={scanInputRef}
+                    scanQuery={scanQuery}
+                    lastScanAttempt={lastScanAttempt}
+                    tire={currentTire}
+                    currentRecord={currentRecord}
+                    observation={observation}
+                    onScanQueryChange={setScanQuery}
+                    onScan={scanTire}
+                    onObservationChange={setObservation}
+                    onAccept={acceptTire}
+                    onReject={openRejectDialog}
+                  />
 
-                <ShiftHistoryPanel records={shiftHistory} totals={totals} />
-              </div>
+                  <ShiftHistoryPanel records={shiftHistory} totals={totals} />
+                </div>
+              )}
             </div>
           </form>
+
+          <RfidScanModal
+            open={isAwaitingFinalAuth}
+            onAuth={handleFinalAuth}
+            title="Control final"
+            heading="Acerque su tarjeta NFC"
+            helperText="Escanee la tarjeta o ingrese el codigo manualmente para habilitar la estacion."
+            placeholder="Codigo de tarjeta..."
+          />
         </div>
       </div>
 
@@ -332,6 +380,10 @@ function FinalControlRoute() {
       />
     </section>
   );
+}
+
+function LockedFinalControlStart() {
+  return <div className="mx-auto min-h-[640px] max-w-6xl" aria-hidden="true" />;
 }
 
 function ThemeToggle({ theme, onToggle }: { theme: ThemeMode; onToggle: () => void }) {
@@ -454,8 +506,9 @@ function FinalControlPanel({
           <div className="grid grid-cols-2 gap-4">
             <Button
               type="button"
+              aria-label="Aceptar neumatico. Presiona A"
               className={cn(
-                "h-20 w-full rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 focus-visible:ring-0 focus-visible:ring-offset-0 [&_svg]:!h-7 [&_svg]:!w-7",
+                "h-20 w-full justify-between rounded-lg bg-emerald-500 px-5 text-white shadow-sm transition-all duration-150 hover:bg-emerald-400 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-0 [&_svg]:!h-[21px] [&_svg]:!w-[21px]",
                 currentRecord?.status === "accepted" &&
                   "shadow-[inset_0_0_0_2px_rgb(4_120_87/0.45)] dark:shadow-[inset_0_0_0_2px_rgb(16_185_129/0.45)]",
               )}
@@ -463,12 +516,17 @@ function FinalControlPanel({
               onClick={onAccept}
               title="Aceptar neumatico"
             >
-              <Check />
+              <span className="flex min-w-0 items-center gap-2.5">
+                <Check strokeWidth={2.5} />
+                <span className="truncate text-[15px] font-semibold tracking-normal">Aceptar</span>
+              </span>
+              <ShortcutKey tone="accepted">A</ShortcutKey>
             </Button>
             <Button
               type="button"
+              aria-label="Rechazar neumatico. Presiona R"
               className={cn(
-                "h-20 w-full rounded-lg bg-red-500 text-white hover:bg-red-400 focus-visible:ring-0 focus-visible:ring-offset-0 [&_svg]:!h-7 [&_svg]:!w-7",
+                "h-20 w-full justify-between rounded-lg bg-red-500 px-5 text-white shadow-sm transition-all duration-150 hover:bg-red-400 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-red-500/50 focus-visible:ring-offset-0 [&_svg]:!h-[21px] [&_svg]:!w-[21px]",
                 currentRecord?.status === "rejected" &&
                   "shadow-[inset_0_0_0_2px_rgb(185_28_28/0.45)] dark:shadow-[inset_0_0_0_2px_rgb(248_113_113/0.45)]",
               )}
@@ -476,7 +534,11 @@ function FinalControlPanel({
               onClick={onReject}
               title="Rechazar neumatico"
             >
-              <XCircle />
+              <span className="flex min-w-0 items-center gap-2.5">
+                <XCircle strokeWidth={2.5} />
+                <span className="truncate text-[15px] font-semibold tracking-normal">Rechazar</span>
+              </span>
+              <ShortcutKey tone="rejected">R</ShortcutKey>
             </Button>
           </div>
         </div>
@@ -572,10 +634,10 @@ function ShiftHistoryPanel({
               Historial del turno
             </div>
             <div className="flex items-center gap-2 text-[11.5px]">
-              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/12 dark:text-emerald-200">
+              <span className="inline-flex h-7 min-w-[64px] items-center justify-center whitespace-nowrap rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 font-medium leading-none text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/12 dark:text-emerald-200">
                 {totals.accepted} OK
               </span>
-              <span className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-0.5 font-medium text-red-700 dark:border-red-400/50 dark:bg-red-400/14 dark:text-red-200">
+              <span className="inline-flex h-7 min-w-[64px] items-center justify-center whitespace-nowrap rounded-md border border-red-500/30 bg-red-500/10 px-2.5 font-medium leading-none text-red-700 dark:border-red-400/50 dark:bg-red-400/14 dark:text-red-200">
                 {totals.rejected} Rech.
               </span>
             </div>
@@ -586,7 +648,7 @@ function ShiftHistoryPanel({
         </div>
 
         {records.length > 0 ? (
-          <div className="linear-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          <div className="linear-scrollbar linear-scrollbar-both-edges min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
             <div className="space-y-2">
               {records.map((record) => (
                 <HistoryRow key={record.id} record={record} />
@@ -611,7 +673,7 @@ function ShiftHistoryPanel({
 function HistoryRow({ record }: { record: ShiftRecord }) {
   return (
     <div className="rounded-lg border border-border/80 bg-card/65 px-4 py-3">
-      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_224px] sm:items-center">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <span className="font-mono text-[13.5px] font-semibold text-foreground">
@@ -621,12 +683,12 @@ function HistoryRow({ record }: { record: ShiftRecord }) {
           <div className="mt-1 truncate text-[12px] text-muted-foreground">{record.model}</div>
         </div>
 
-        <div className="flex items-center gap-2 sm:justify-end">
-          <span className="flex items-center gap-1 font-mono text-[12px] text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            {formatClockTime(record.inspectedAt)}
+        <div className="grid w-full grid-cols-[112px_100px] items-center gap-3 sm:w-[224px] sm:justify-self-end">
+          <span className="flex w-[112px] items-center justify-end gap-1 font-mono text-[12px] text-muted-foreground">
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <span className="whitespace-nowrap">{formatClockTime(record.inspectedAt)}</span>
           </span>
-          <StatusBadge status={record.status} compact />
+          <StatusBadge status={record.status} compact className="w-[100px] justify-center" />
         </div>
       </div>
     </div>
@@ -707,6 +769,21 @@ function RejectReasonDialog({
   );
 }
 
+function ShortcutKey({ children, tone }: { children: ReactNode; tone: FinalControlStatus }) {
+  return (
+    <kbd
+      aria-hidden="true"
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded border px-2 py-0.5 font-mono text-[11px] font-semibold leading-none no-underline shadow-none",
+        tone === "accepted" && "border-emerald-300/30 bg-emerald-700/55 text-emerald-50",
+        tone === "rejected" && "border-red-300/30 bg-red-700/55 text-red-50",
+      )}
+    >
+      [{children}]
+    </kbd>
+  );
+}
+
 function FieldBlock({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return (
     <div>
@@ -767,13 +844,22 @@ function EmptyFinalControlState({
   );
 }
 
-function StatusBadge({ status, compact }: { status?: FinalControlStatus; compact?: boolean }) {
+function StatusBadge({
+  status,
+  compact,
+  className,
+}: {
+  status?: FinalControlStatus;
+  compact?: boolean;
+  className?: string;
+}) {
   if (status === "accepted") {
     return (
       <span
         className={cn(
           "inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-400/50 dark:bg-emerald-400/12 dark:text-emerald-200",
           compact ? "text-[10.5px]" : "text-[11px]",
+          className,
         )}
       >
         <CheckCircle2 className="h-3.5 w-3.5" />
@@ -788,6 +874,7 @@ function StatusBadge({ status, compact }: { status?: FinalControlStatus; compact
         className={cn(
           "inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-0.5 font-medium text-red-700 dark:border-red-400/60 dark:bg-red-400/14 dark:text-red-200",
           compact ? "text-[10.5px]" : "text-[11px]",
+          className,
         )}
       >
         <XCircle className="h-3.5 w-3.5" />
@@ -799,8 +886,9 @@ function StatusBadge({ status, compact }: { status?: FinalControlStatus; compact
   return (
     <span
       className={cn(
-        "rounded-md border border-border/80 bg-background/40 px-2 py-0.5 font-medium text-muted-foreground",
+        "inline-flex items-center rounded-md border border-border/80 bg-background/40 px-2 py-0.5 font-medium text-muted-foreground",
         compact ? "text-[10.5px]" : "text-[11px]",
+        className,
       )}
     >
       Pendiente
@@ -826,6 +914,16 @@ function buildRejectedObservation(observation: string, reasons: string[]) {
   if (baseObservation.includes(reasonsText)) return baseObservation;
 
   return `${baseObservation}\n${reasonsText}`;
+}
+
+function isFinalControlShortcutBlocked(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+
+  const tagName = target.tagName.toLowerCase();
+  if (tagName === "textarea" || tagName === "select") return true;
+
+  return tagName === "input" && target.id !== "neumatico-control-final";
 }
 
 function getShiftTotals(records: ShiftRecord[]) {
@@ -854,5 +952,6 @@ function formatClockTime(value: string) {
   return date.toLocaleTimeString("es-AR", {
     hour: "2-digit",
     minute: "2-digit",
+    hour12: true,
   });
 }
