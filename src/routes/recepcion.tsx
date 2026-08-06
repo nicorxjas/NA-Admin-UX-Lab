@@ -9,13 +9,15 @@ import {
   ClipboardList,
   FileText,
   Layers3,
+  Moon,
   Plus,
   ScanLine,
   ShieldCheck,
+  Sun,
   Trash2,
   X,
 } from "lucide-react";
-import { useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
@@ -96,7 +98,20 @@ type StepOneErrors = {
   materials?: FieldError;
 };
 
+type ThemeMode = "dark" | "light";
+
+const THEME_STORAGE_KEY = "na-carrera-recepcion-theme";
+
+function getStoredTheme() {
+  if (typeof window === "undefined") return undefined;
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return storedTheme === "light" || storedTheme === "dark" ? storedTheme : undefined;
+}
+
 function ReceptionRoute() {
+  const [theme, setTheme] = useState<ThemeMode>("dark");
+  const [isThemeReady, setIsThemeReady] = useState(false);
   const [activeStep, setActiveStep] = useState(1);
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [isEntryUnlocked, setIsEntryUnlocked] = useState(false);
@@ -106,6 +121,19 @@ function ReceptionRoute() {
   const [stepOneErrors, setStepOneErrors] = useState<StepOneErrors>({});
   const receptionProvider = getReceiptProviderLabel(receiptMaterials);
   const isAwaitingEntryAuth = !isConfirmed && !isEntryUnlocked;
+
+  useEffect(() => {
+    setTheme(getStoredTheme() ?? "dark");
+    setIsThemeReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isThemeReady) return;
+
+    const isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [isThemeReady, theme]);
 
   const updateRemito = (value: string) => {
     setRemito(value);
@@ -412,14 +440,18 @@ function ReceptionRoute() {
     setIsEntryUnlocked(true);
   };
 
+  const toggleTheme = () => {
+    setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
+  };
+
   return (
     <section className="min-h-screen bg-background px-4 py-5 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-6xl items-center justify-center">
-        <div className="flex min-h-[calc(100vh-2.5rem)] w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-2xl shadow-black/35">
+        <div className="flex min-h-[calc(100vh-2.5rem)] w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-[0_24px_80px_rgb(15_23_42/0.1)] dark:shadow-2xl dark:shadow-black/35">
           <header className="border-b border-border/70 px-5 py-5 sm:px-8">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#A8B1FF]">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#5E6AD2] dark:text-[#A8B1FF]">
                   <ClipboardList className="h-3.5 w-3.5" />
                   Recepción
                 </div>
@@ -439,17 +471,20 @@ function ReceptionRoute() {
                 </p>
               </div>
 
-              <Button
-                asChild
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-                title="Cerrar"
-              >
-                <Link to="/">
-                  <X className="h-4 w-4" />
-                </Link>
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                <ThemeToggle theme={theme} onToggle={toggleTheme} />
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                  title="Cerrar"
+                >
+                  <Link to="/">
+                    <X className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </div>
             </div>
 
             {!isConfirmed && !isAwaitingEntryAuth ? (
@@ -569,6 +604,42 @@ function ReceptionRoute() {
   );
 }
 
+function ThemeToggle({ theme, onToggle }: { theme: ThemeMode; onToggle: () => void }) {
+  const isLight = theme === "light";
+
+  return (
+    <button
+      type="button"
+      aria-label={isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+      aria-pressed={theme === "dark"}
+      title={isLight ? "Modo claro" : "Modo oscuro"}
+      onClick={onToggle}
+      className="group inline-grid h-8 shrink-0 grid-cols-2 rounded-md border border-border/80 bg-background/70 p-0.5 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <span
+        className={cn(
+          "grid h-7 w-7 place-items-center rounded-[6px] transition-all",
+          isLight
+            ? "bg-card text-foreground shadow-[0_1px_2px_rgb(15_23_42/0.08)] ring-1 ring-border/70"
+            : "text-muted-foreground/80 group-hover:text-foreground",
+        )}
+      >
+        <Sun className="h-3.5 w-3.5" strokeWidth={1.8} />
+      </span>
+      <span
+        className={cn(
+          "grid h-7 w-7 place-items-center rounded-[6px] transition-all",
+          !isLight
+            ? "bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.28)] ring-1 ring-border/70"
+            : "text-muted-foreground/80 group-hover:text-foreground",
+        )}
+      >
+        <Moon className="h-3.5 w-3.5" strokeWidth={1.8} />
+      </span>
+    </button>
+  );
+}
+
 function ReceptionDetailsStep({
   remito,
   receptionDate,
@@ -635,7 +706,7 @@ function ReceptionDetailsStep({
               "h-11 text-[13.5px]",
               validationErrors.receptionDate && "reception-field-error",
             )}
-            iconClassName="h-4 w-4 text-[#A8B1FF]"
+            iconClassName="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]"
             calendarClassName="reception-calendar-surface"
           />
         </div>
@@ -752,7 +823,7 @@ function ConfirmedStep({
   return (
     <div className="mx-auto flex min-h-[520px] max-w-3xl flex-col items-center justify-center py-10 text-center">
       <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[#5E6AD2]/45 bg-[#5E6AD2]/10">
-        <CheckCircle2 className="h-8 w-8 text-[#A8B1FF]" strokeWidth={1.8} />
+        <CheckCircle2 className="h-8 w-8 text-[#5E6AD2] dark:text-[#A8B1FF]" strokeWidth={1.8} />
       </div>
 
       <h2 className="mt-7 text-[26px] font-semibold tracking-tight text-foreground sm:text-[30px]">
@@ -811,7 +882,7 @@ function ConfirmStep({
     <div className="mx-auto max-w-5xl space-y-5">
       <div className="rounded-lg border border-[#5E6AD2]/45 bg-[#5E6AD2]/10 p-5">
         <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground">
-          <ShieldCheck className="h-4 w-4 text-[#A8B1FF]" />
+          <ShieldCheck className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
           Resumen del ingreso
         </div>
         <p className="mt-3 text-[13px] leading-relaxed text-muted-foreground">
@@ -827,7 +898,7 @@ function ConfirmStep({
 
       <section className="rounded-lg border border-border/80 bg-background/35 p-5">
         <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground">
-          <Boxes className="h-4 w-4 text-[#A8B1FF]" />
+          <Boxes className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
           Trazabilidad
         </div>
 
@@ -980,7 +1051,7 @@ function MaterialSelectionRow({
 
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3 rounded-lg border border-border/80 bg-card/60 px-4 py-3">
-      <Boxes className="mt-0.5 h-4 w-4 shrink-0 text-[#A8B1FF]" />
+      <Boxes className="mt-0.5 h-4 w-4 shrink-0 text-[#5E6AD2] dark:text-[#A8B1FF]" />
       <div className="min-w-0">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
           <div className="truncate text-[15px] font-semibold text-foreground">
@@ -997,7 +1068,7 @@ function MaterialSelectionRow({
                     {level}
                   </span>
                   {index < material.traceability.length - 1 ? (
-                    <ChevronRight className="h-3.5 w-3.5 text-[#A8B1FF]" />
+                    <ChevronRight className="h-3.5 w-3.5 text-[#5E6AD2] dark:text-[#A8B1FF]" />
                   ) : null}
                 </div>
               ))}
@@ -1148,7 +1219,7 @@ function ReceiptMaterialTraceCard({
               )}
             />
           </Button>
-          <Boxes className="h-4 w-4 shrink-0 text-[#A8B1FF]" />
+          <Boxes className="h-4 w-4 shrink-0 text-[#5E6AD2] dark:text-[#A8B1FF]" />
           <div className="min-w-0">
             <div className="truncate text-[15px] font-semibold text-foreground">
               Recepción Material {receiptMaterial.materialCode}
@@ -1637,7 +1708,7 @@ function LotTraceCard({
               className={cn("h-4 w-4 transition-transform", lot.expanded && "rotate-180")}
             />
           </Button>
-          <FileText className="h-4 w-4 shrink-0 text-[#A8B1FF]" />
+          <FileText className="h-4 w-4 shrink-0 text-[#5E6AD2] dark:text-[#A8B1FF]" />
           <span className="min-w-0 truncate font-mono text-[13.5px] font-semibold text-foreground">
             Lote {lot.code}
           </span>
@@ -1782,7 +1853,7 @@ function PaletTraceCard({
           palet.expanded && "border-b border-border/70",
         )}
       >
-        <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
+        <Layers3 className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="font-mono text-[13.5px] font-semibold text-foreground">
@@ -1970,7 +2041,7 @@ function EmptyTraceState({
 }) {
   const content = (
     <>
-      <Icon className="mx-auto h-7 w-7 text-[#A8B1FF]" />
+      <Icon className="mx-auto h-7 w-7 text-[#5E6AD2] dark:text-[#A8B1FF]" />
       <div className="mt-4 text-[14px] font-semibold text-foreground">{title}</div>
       <p className="mt-2 text-[12.5px] leading-relaxed text-muted-foreground">{message}</p>
     </>
@@ -1981,7 +2052,7 @@ function EmptyTraceState({
       <button
         type="button"
         className={cn(
-          "w-full rounded-lg border border-dashed border-border/80 bg-background/25 px-4 py-12 text-center transition-colors hover:border-[#A8B1FF]/60 hover:bg-[#5E6AD2]/10",
+          "w-full rounded-lg border border-dashed border-border/80 bg-background/25 px-4 py-12 text-center transition-colors hover:border-[#5E6AD2]/60 hover:bg-[#5E6AD2]/10 dark:hover:border-[#A8B1FF]/60",
           className,
         )}
         onClick={onClick}
@@ -2031,7 +2102,7 @@ function MaterialsTraceabilitySummary({
           >
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <div className="flex min-w-0 items-center gap-2">
-                <Boxes className="h-3.5 w-3.5 shrink-0 text-[#A8B1FF]" />
+                <Boxes className="h-3.5 w-3.5 shrink-0 text-[#5E6AD2] dark:text-[#A8B1FF]" />
                 <span className="text-[15px] font-semibold text-foreground">
                   Recepción Material {receiptMaterial.materialCode}
                 </span>
@@ -2080,7 +2151,7 @@ function TraceabilitySummary({ lots }: { lots: TraceLot[] }) {
           <div key={lot.id} className="rounded-md border border-border/70 bg-card/60 px-4 py-3">
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <div className="flex min-w-0 items-center gap-2">
-                <FileText className="h-3.5 w-3.5 shrink-0 text-[#A8B1FF]" />
+                <FileText className="h-3.5 w-3.5 shrink-0 text-[#5E6AD2] dark:text-[#A8B1FF]" />
                 <span className="font-mono text-[16px] font-semibold text-foreground">
                   Lote {formatLotCode(lot)}
                 </span>
@@ -2100,7 +2171,7 @@ function TraceabilitySummary({ lots }: { lots: TraceLot[] }) {
                 {lot.palets.map((palet) => (
                   <div key={palet.id}>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
+                      <Layers3 className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
                       <span className="font-mono text-[13.5px] font-semibold text-foreground">
                         Palet {palet.code}
                       </span>
@@ -2148,7 +2219,7 @@ function RollsTraceabilitySummary({ rolls }: { rolls: string[] }) {
   return (
     <div className="mt-4">
       <div className="flex items-center gap-2">
-        <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
+        <Layers3 className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
         <span className="font-mono text-[13.5px] font-semibold text-foreground">Rollos</span>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -2225,7 +2296,7 @@ function LiveMaterialSummary({ receiptMaterial }: { receiptMaterial: ReceiptMate
   return (
     <div className="rounded-lg border border-border/80 bg-background/35 p-4">
       <div className="flex items-center gap-2 text-[15px] font-semibold text-foreground">
-        <Boxes className="h-4 w-4 text-[#A8B1FF]" />
+        <Boxes className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
         Recepción Material {receiptMaterial.materialCode}
       </div>
 
@@ -2236,7 +2307,7 @@ function LiveMaterialSummary({ receiptMaterial }: { receiptMaterial: ReceiptMate
           ) : (
             <div>
               <div className="flex items-center gap-2">
-                <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
+                <Layers3 className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
                 <span className="font-mono text-[13.5px] font-semibold text-foreground">
                   Rollos
                 </span>
@@ -2259,7 +2330,7 @@ function LiveMaterialSummary({ receiptMaterial }: { receiptMaterial: ReceiptMate
           <div className="space-y-3">
             {receiptMaterial.lots.map((lot) => (
               <div key={lot.id} className="flex items-start gap-2">
-                <FileText className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
+                <FileText className="mt-0.5 h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
                 <div className="min-w-0">
                   <div className="font-mono text-[13px] font-semibold text-foreground">
                     Lote {formatLotCode(lot)}
@@ -2273,7 +2344,7 @@ function LiveMaterialSummary({ receiptMaterial }: { receiptMaterial: ReceiptMate
                     <div className="mt-2 space-y-2 border-l border-border/80 pl-4">
                       {lot.palets.map((palet) => (
                         <div key={palet.id} className="flex items-start gap-2">
-                          <Layers3 className="mt-0.5 h-4 w-4 text-[#A8B1FF]" />
+                          <Layers3 className="mt-0.5 h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
                           <div>
                             <div className="font-mono text-[13px] font-semibold text-foreground">
                               Palet {palet.code}
@@ -2309,7 +2380,7 @@ function LiveContext({
 }) {
   return (
     <div className="flex items-center gap-2 rounded-md border border-border/70 bg-card/60 px-3 py-2">
-      <Icon className="h-3.5 w-3.5 text-[#A8B1FF]" />
+      <Icon className="h-3.5 w-3.5 text-[#5E6AD2] dark:text-[#A8B1FF]" />
       <span className="text-[15px] font-semibold text-foreground">{label}</span>
       <span className={cn("ml-auto truncate text-[12.5px] text-foreground", mono && "font-mono")}>
         {value}
@@ -2326,7 +2397,7 @@ function LiveMetric({ label, value, mono }: { label: string; value: string; mono
       </div>
       <div
         className={cn(
-          "mt-1 font-semibold text-[#A8B1FF]",
+          "mt-1 font-semibold text-[#5E6AD2] dark:text-[#A8B1FF]",
           mono ? "font-mono text-[15px] leading-relaxed" : "text-[22px]",
         )}
       >
@@ -2527,7 +2598,7 @@ function StepItem({
             isCurrent
               ? "border-[#5E6AD2] bg-[#5E6AD2] text-white shadow-[0_0_0_4px_rgba(94,106,210,0.16)]"
               : isComplete
-                ? "border-[#5E6AD2]/60 bg-[#5E6AD2]/15 text-[#A8B1FF]"
+                ? "border-[#5E6AD2]/60 bg-[#5E6AD2]/15 text-[#5E6AD2] dark:text-[#A8B1FF]"
                 : "border-border bg-background/55 text-muted-foreground",
           )}
         >
@@ -2537,7 +2608,9 @@ function StepItem({
           <div
             className={cn(
               "flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]",
-              isCurrent || isComplete ? "text-[#A8B1FF]" : "text-muted-foreground",
+              isCurrent || isComplete
+                ? "text-[#5E6AD2] dark:text-[#A8B1FF]"
+                : "text-muted-foreground",
             )}
           >
             <Icon className="h-3.5 w-3.5" />
@@ -2556,7 +2629,9 @@ function StepItem({
 function ValidationMessage({ error }: { error?: FieldError }) {
   if (!error) return null;
 
-  return <p className="mt-2 text-[12px] font-medium text-red-400">{error.message}</p>;
+  return (
+    <p className="mt-2 text-[12px] font-medium text-red-600 dark:text-red-400">{error.message}</p>
+  );
 }
 
 function FieldBlock({
@@ -2581,7 +2656,7 @@ function FieldBlock({
         >
           {label}
         </Label>
-        {required && <span className="text-[#A8B1FF]">*</span>}
+        {required && <span className="text-[#5E6AD2] dark:text-[#A8B1FF]">*</span>}
       </div>
       {children}
     </div>
