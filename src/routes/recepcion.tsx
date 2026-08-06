@@ -15,7 +15,6 @@ import {
   ShieldCheck,
   Sun,
   Trash2,
-  X,
 } from "lucide-react";
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 
@@ -471,19 +470,8 @@ function ReceptionRoute() {
                 </p>
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="shrink-0">
                 <ThemeToggle theme={theme} onToggle={toggleTheme} />
-                <Button
-                  asChild
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  title="Cerrar"
-                >
-                  <Link to="/">
-                    <X className="h-4 w-4" />
-                  </Link>
-                </Button>
               </div>
             </div>
 
