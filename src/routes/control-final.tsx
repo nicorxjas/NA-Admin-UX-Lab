@@ -1,13 +1,14 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   Check,
   CheckCircle2,
   Clock,
   FileSearch,
   History,
+  Moon,
   Search,
   ShieldCheck,
-  X,
+  Sun,
   XCircle,
 } from "lucide-react";
 import {
@@ -40,6 +41,7 @@ export const Route = createFileRoute("/control-final")({
 });
 
 type FinalControlStatus = "accepted" | "rejected";
+type ThemeMode = "dark" | "light";
 
 type FinalControlTire = {
   id: string;
@@ -128,8 +130,19 @@ const frequentRejectionReasons = [
   "Terminacion irregular",
 ];
 
+const THEME_STORAGE_KEY = "na-carrera-control-final-theme";
+
+function getStoredTheme() {
+  if (typeof window === "undefined") return undefined;
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return storedTheme === "light" || storedTheme === "dark" ? storedTheme : undefined;
+}
+
 function FinalControlRoute() {
   const scanInputRef = useRef<HTMLInputElement>(null);
+  const [theme, setTheme] = useState<ThemeMode>("dark");
+  const [isThemeReady, setIsThemeReady] = useState(false);
   const [scanQuery, setScanQuery] = useState("");
   const [lastScanAttempt, setLastScanAttempt] = useState("");
   const [currentTire, setCurrentTire] = useState<FinalControlTire | undefined>();
@@ -143,6 +156,19 @@ function FinalControlRoute() {
     [currentTire, shiftHistory],
   );
   const totals = useMemo(() => getShiftTotals(shiftHistory), [shiftHistory]);
+
+  useEffect(() => {
+    setTheme(getStoredTheme() ?? "dark");
+    setIsThemeReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isThemeReady) return;
+
+    const isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [isThemeReady, theme]);
 
   const scanTire = (value?: string) => {
     const nextQuery = normalizeScanCode(value ?? scanQuery);
@@ -240,14 +266,18 @@ function FinalControlRoute() {
     );
   };
 
+  const toggleTheme = () => {
+    setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
+  };
+
   return (
     <section className="min-h-screen bg-background px-4 py-5 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-6xl items-center justify-center">
-        <div className="flex min-h-[calc(100vh-2.5rem)] w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-2xl shadow-black/35">
+        <div className="flex min-h-[calc(100vh-2.5rem)] w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-[0_24px_80px_rgb(15_23_42/0.1)] dark:shadow-2xl dark:shadow-black/35">
           <header className="border-b border-border/70 px-5 py-5 sm:px-8">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#A8B1FF]">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#5E6AD2] dark:text-[#A8B1FF]">
                   <ShieldCheck className="h-3.5 w-3.5" />
                   Control final
                 </div>
@@ -260,17 +290,7 @@ function FinalControlRoute() {
                 </p>
               </div>
 
-              <Button
-                asChild
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
-                title="Cerrar"
-              >
-                <Link to="/recepcion">
-                  <X className="h-4 w-4" />
-                </Link>
-              </Button>
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
             </div>
           </header>
 
@@ -314,6 +334,42 @@ function FinalControlRoute() {
   );
 }
 
+function ThemeToggle({ theme, onToggle }: { theme: ThemeMode; onToggle: () => void }) {
+  const isLight = theme === "light";
+
+  return (
+    <button
+      type="button"
+      aria-label={isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+      aria-pressed={theme === "dark"}
+      title={isLight ? "Modo claro" : "Modo oscuro"}
+      onClick={onToggle}
+      className="group inline-grid h-8 shrink-0 grid-cols-2 rounded-md border border-border/80 bg-background/70 p-0.5 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <span
+        className={cn(
+          "grid h-7 w-7 place-items-center rounded-[6px] transition-all",
+          isLight
+            ? "bg-card text-foreground shadow-[0_1px_2px_rgb(15_23_42/0.08)] ring-1 ring-border/70"
+            : "text-muted-foreground/80 group-hover:text-foreground",
+        )}
+      >
+        <Sun className="h-3.5 w-3.5" strokeWidth={1.8} />
+      </span>
+      <span
+        className={cn(
+          "grid h-7 w-7 place-items-center rounded-[6px] transition-all",
+          !isLight
+            ? "bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.28)] ring-1 ring-border/70"
+            : "text-muted-foreground/80 group-hover:text-foreground",
+        )}
+      >
+        <Moon className="h-3.5 w-3.5" strokeWidth={1.8} />
+      </span>
+    </button>
+  );
+}
+
 function FinalControlPanel({
   scanInputRef,
   scanQuery,
@@ -342,10 +398,10 @@ function FinalControlPanel({
   return (
     <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/80 bg-background/35 lg:min-h-[640px]">
       <div className="border-b border-border/70 px-4 py-4 sm:px-5">
-        <FieldBlock id="neumatico-control-final" label="Escaneo de Neumatico">
+        <FieldBlock id="neumatico-control-final" label="Escaneo de Neumático">
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A8B1FF]" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5E6AD2] dark:text-[#A8B1FF]" />
               <Input
                 ref={scanInputRef}
                 id="neumatico-control-final"
@@ -400,7 +456,8 @@ function FinalControlPanel({
               type="button"
               className={cn(
                 "h-20 w-full rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 focus-visible:ring-0 focus-visible:ring-offset-0 [&_svg]:!h-7 [&_svg]:!w-7",
-                currentRecord?.status === "accepted" && "ring-2 ring-emerald-200/80",
+                currentRecord?.status === "accepted" &&
+                  "shadow-[inset_0_0_0_2px_rgb(4_120_87/0.45)] dark:shadow-[inset_0_0_0_2px_rgb(16_185_129/0.45)]",
               )}
               disabled={!tire}
               onClick={onAccept}
@@ -412,7 +469,8 @@ function FinalControlPanel({
               type="button"
               className={cn(
                 "h-20 w-full rounded-lg bg-red-500 text-white hover:bg-red-400 focus-visible:ring-0 focus-visible:ring-offset-0 [&_svg]:!h-7 [&_svg]:!w-7",
-                currentRecord?.status === "rejected" && "ring-2 ring-red-200/80",
+                currentRecord?.status === "rejected" &&
+                  "shadow-[inset_0_0_0_2px_rgb(185_28_28/0.45)] dark:shadow-[inset_0_0_0_2px_rgb(248_113_113/0.45)]",
               )}
               disabled={!tire}
               onClick={onReject}
@@ -510,14 +568,14 @@ function ShiftHistoryPanel({
         <div className="border-b border-border/70 px-4 py-4 sm:px-5">
           <div className="flex items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground">
-              <History className="h-4 w-4 shrink-0 text-[#A8B1FF]" />
+              <History className="h-4 w-4 shrink-0 text-[#5E6AD2] dark:text-[#A8B1FF]" />
               Historial del turno
             </div>
             <div className="flex items-center gap-2 text-[11.5px]">
-              <span className="rounded-md border border-emerald-400/40 bg-emerald-400/12 px-2 py-0.5 font-medium text-emerald-200">
+              <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/12 dark:text-emerald-200">
                 {totals.accepted} OK
               </span>
-              <span className="rounded-md border border-red-400/50 bg-red-400/14 px-2 py-0.5 font-medium text-red-200">
+              <span className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-0.5 font-medium text-red-700 dark:border-red-400/50 dark:bg-red-400/14 dark:text-red-200">
                 {totals.rejected} Rech.
               </span>
             </div>
@@ -592,7 +650,7 @@ function RejectReasonDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl border-border/80 bg-card p-0 shadow-2xl shadow-black/40">
+      <DialogContent className="max-w-2xl border-border/80 bg-card p-0 shadow-[0_24px_80px_rgb(15_23_42/0.16)] dark:shadow-2xl dark:shadow-black/40">
         <div className="border-b border-border/70 px-6 py-5">
           <DialogHeader>
             <DialogTitle className="text-[18px]">Motivos frecuentes de rechazo</DialogTitle>
@@ -616,8 +674,8 @@ function RejectReasonDialog({
                 className={cn(
                   "min-h-12 rounded-lg border px-3 py-2 text-left text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                   selected
-                    ? "border-red-300/80 bg-red-400/18 text-red-100"
-                    : "border-border/80 bg-background/45 text-foreground hover:border-red-300/60 hover:bg-red-400/10",
+                    ? "border-red-500/40 bg-red-500/10 text-red-700 dark:border-red-300/80 dark:bg-red-400/18 dark:text-red-100"
+                    : "border-border/80 bg-background/45 text-foreground hover:border-red-500/30 hover:bg-red-500/10 dark:hover:border-red-300/60 dark:hover:bg-red-400/10",
                 )}
               >
                 {reason}
@@ -700,7 +758,7 @@ function EmptyFinalControlState({
         className,
       )}
     >
-      <Icon className="mx-auto h-7 w-7 text-[#A8B1FF]" />
+      <Icon className="mx-auto h-7 w-7 text-[#5E6AD2] dark:text-[#A8B1FF]" />
       <div className="mt-4 text-[14px] font-semibold text-foreground">{title}</div>
       <p className="mx-auto mt-2 max-w-sm text-[12.5px] leading-relaxed text-muted-foreground">
         {message}
@@ -714,7 +772,7 @@ function StatusBadge({ status, compact }: { status?: FinalControlStatus; compact
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 rounded-md border border-emerald-400/50 bg-emerald-400/12 px-2 py-0.5 font-medium text-emerald-200",
+          "inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-medium text-emerald-700 dark:border-emerald-400/50 dark:bg-emerald-400/12 dark:text-emerald-200",
           compact ? "text-[10.5px]" : "text-[11px]",
         )}
       >
@@ -728,7 +786,7 @@ function StatusBadge({ status, compact }: { status?: FinalControlStatus; compact
     return (
       <span
         className={cn(
-          "inline-flex items-center gap-1 rounded-md border border-red-400/60 bg-red-400/14 px-2 py-0.5 font-medium text-red-200",
+          "inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-0.5 font-medium text-red-700 dark:border-red-400/60 dark:bg-red-400/14 dark:text-red-200",
           compact ? "text-[10.5px]" : "text-[11px]",
         )}
       >
