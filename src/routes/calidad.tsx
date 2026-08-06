@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   Boxes,
   Check,
@@ -9,8 +9,9 @@ import {
   FileSearch,
   FileText,
   Layers3,
+  Moon,
   Search,
-  X,
+  Sun,
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
@@ -26,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { RfidScanModal } from "@/components/hmi/RfidScanModal";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/calidad")({
@@ -44,6 +46,17 @@ const bandMaterials = [
     description: "Banda lluvia B",
   },
 ];
+
+type ThemeMode = "dark" | "light";
+
+const THEME_STORAGE_KEY = "na-carrera-recepcion-theme";
+
+function getStoredTheme() {
+  if (typeof window === "undefined") return undefined;
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return storedTheme === "light" || storedTheme === "dark" ? storedTheme : undefined;
+}
 
 const receivedBandLots: Record<string, ReceivedLot[]> = {
   "2006/1": [
@@ -90,6 +103,24 @@ const receivedBandLots: Record<string, ReceivedLot[]> = {
     },
   ],
   "2008/1": [
+    {
+      id: "lot-2008-24",
+      code: "24",
+      remito: "R-0087494",
+      receivedAt: "2026-08-04",
+      palets: [
+        {
+          id: "palet-2008-24-1",
+          code: "1",
+          batches: createBatchList(1, 4),
+        },
+        {
+          id: "palet-2008-24-2",
+          code: "2",
+          batches: createBatchList(5, 9),
+        },
+      ],
+    },
     {
       id: "lot-2008-31",
       code: "31",
@@ -147,6 +178,9 @@ type SelectedBatch = {
 };
 
 function QualityRoute() {
+  const [theme, setTheme] = useState<ThemeMode>("dark");
+  const [isThemeReady, setIsThemeReady] = useState(false);
+  const [isQualityUnlocked, setIsQualityUnlocked] = useState(false);
   const [materialCode, setMaterialCode] = useState(bandMaterials[0]?.code ?? "");
   const [lotQuery, setLotQuery] = useState("");
   const [selectedBatch, setSelectedBatch] = useState<SelectedBatch | undefined>();
@@ -176,6 +210,20 @@ function QualityRoute() {
     currentInspectionKey && finishedInspectionKey === currentInspectionKey,
   );
   const isLotRequested = lotQuery.trim().length > 0;
+  const isAwaitingQualityAuth = !isQualityUnlocked;
+
+  useEffect(() => {
+    setTheme(getStoredTheme() ?? "dark");
+    setIsThemeReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isThemeReady) return;
+
+    const isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [isThemeReady, theme]);
 
   useEffect(() => {
     if (!currentLot) {
@@ -325,14 +373,31 @@ function QualityRoute() {
     setFinishedInspectionKey(getInspectionKey(materialCode, currentLot.id));
   };
 
+  const handleQualityAuth = () => {
+    setIsQualityUnlocked(true);
+  };
+
+  const finishQualityTurn = () => {
+    setMaterialCode(bandMaterials[0]?.code ?? "");
+    setLotQuery("");
+    setSelectedBatch(undefined);
+    setBatchDecisions({});
+    setFinishedInspectionKey(undefined);
+    setIsQualityUnlocked(false);
+  };
+
+  const toggleTheme = () => {
+    setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
+  };
+
   return (
     <section className="min-h-screen bg-background px-4 py-5 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-6xl items-center justify-center">
-        <div className="flex min-h-[calc(100vh-2.5rem)] w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-2xl shadow-black/35">
+        <div className="flex min-h-[calc(100vh-2.5rem)] w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-[0_24px_80px_rgb(15_23_42/0.1)] dark:shadow-2xl dark:shadow-black/35">
           <header className="border-b border-border/70 px-5 py-5 sm:px-8">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#A8B1FF]">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-[#5E6AD2] dark:text-[#A8B1FF]">
                   <ClipboardCheck className="h-3.5 w-3.5" />
                   Calidad
                 </div>
@@ -344,17 +409,7 @@ function QualityRoute() {
                 </p>
               </div>
 
-              <Button
-                asChild
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
-                title="Cerrar"
-              >
-                <Link to="/recepcion">
-                  <X className="h-4 w-4" />
-                </Link>
-              </Button>
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
             </div>
           </header>
 
@@ -364,49 +419,103 @@ function QualityRoute() {
             onSubmit={(event) => event.preventDefault()}
           >
             <div className="flex-1 px-5 py-7 sm:px-8 lg:px-10">
-              <div className="mx-auto grid max-w-6xl gap-6 lg:min-h-[640px] lg:grid-cols-2 lg:items-stretch">
-                <div className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/80 bg-background/35 lg:min-h-[640px]">
-                  <QualityLookup
-                    lotQuery={lotQuery}
-                    materialCode={materialCode}
-                    onLotQueryChange={setLotQuery}
-                    onMaterialChange={updateMaterial}
-                  />
+              {isAwaitingQualityAuth ? (
+                <LockedQualityStart />
+              ) : (
+                <div className="mx-auto grid max-w-6xl gap-6 lg:min-h-[640px] lg:grid-cols-2 lg:items-stretch">
+                  <div className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border/80 bg-background/35 lg:min-h-[640px]">
+                    <QualityLookup
+                      lotQuery={lotQuery}
+                      materialCode={materialCode}
+                      onLotQueryChange={setLotQuery}
+                      onMaterialChange={updateMaterial}
+                    />
 
-                  <QualityTracePanel
+                    <QualityTracePanel
+                      lot={currentLot}
+                      lotQuery={lotQuery}
+                      material={selectedMaterial}
+                      isLotRequested={isLotRequested}
+                      batchDecisions={batchDecisions}
+                      selectedBatch={selectedBatch}
+                      onSelectPalet={selectPalet}
+                      onSelectBatch={selectBatch}
+                    />
+                  </div>
+
+                  <BatchDecisionPanel
+                    batch={currentBatch}
+                    palet={selectedPalet}
                     lot={currentLot}
-                    lotQuery={lotQuery}
-                    material={selectedMaterial}
-                    isLotRequested={isLotRequested}
-                    batchDecisions={batchDecisions}
-                    selectedBatch={selectedBatch}
-                    onSelectPalet={selectPalet}
-                    onSelectBatch={selectBatch}
+                    decision={selectedDecision}
+                    totals={totals}
+                    isInspectionComplete={isInspectionComplete}
+                    isInspectionFinished={isInspectionFinished}
+                    canMoveBackward={canMoveBackward}
+                    canMoveForward={canMoveForward}
+                    onMoveBackward={() => moveSelectedBatch(-1)}
+                    onMoveForward={() => moveSelectedBatch(1)}
+                    onStatusChange={updateBatchStatus}
+                    onObservationChange={updateObservation}
+                    onFinishInspection={finishInspection}
+                    onFinishTurn={finishQualityTurn}
                   />
                 </div>
-
-                <BatchDecisionPanel
-                  batch={currentBatch}
-                  palet={selectedPalet}
-                  lot={currentLot}
-                  decision={selectedDecision}
-                  totals={totals}
-                  isInspectionComplete={isInspectionComplete}
-                  isInspectionFinished={isInspectionFinished}
-                  canMoveBackward={canMoveBackward}
-                  canMoveForward={canMoveForward}
-                  onMoveBackward={() => moveSelectedBatch(-1)}
-                  onMoveForward={() => moveSelectedBatch(1)}
-                  onStatusChange={updateBatchStatus}
-                  onObservationChange={updateObservation}
-                  onFinishInspection={finishInspection}
-                />
-              </div>
+              )}
             </div>
           </form>
+
+          <RfidScanModal
+            open={isAwaitingQualityAuth}
+            onAuth={handleQualityAuth}
+            title="Control de calidad"
+            heading="Acerque su tarjeta NFC"
+            helperText="Escanee la tarjeta o ingrese el codigo manualmente para habilitar la estacion."
+            placeholder="Codigo de tarjeta..."
+          />
         </div>
       </div>
     </section>
+  );
+}
+
+function LockedQualityStart() {
+  return <div className="mx-auto min-h-[640px] max-w-6xl" aria-hidden="true" />;
+}
+
+function ThemeToggle({ theme, onToggle }: { theme: ThemeMode; onToggle: () => void }) {
+  const isLight = theme === "light";
+
+  return (
+    <button
+      type="button"
+      aria-label={isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+      aria-pressed={theme === "dark"}
+      title={isLight ? "Modo claro" : "Modo oscuro"}
+      onClick={onToggle}
+      className="group inline-grid h-8 shrink-0 grid-cols-2 rounded-md border border-border/80 bg-background/70 p-0.5 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <span
+        className={cn(
+          "grid h-7 w-7 place-items-center rounded-[6px] transition-all",
+          isLight
+            ? "bg-card text-foreground shadow-[0_1px_2px_rgb(15_23_42/0.08)] ring-1 ring-border/70"
+            : "text-muted-foreground/80 group-hover:text-foreground",
+        )}
+      >
+        <Sun className="h-3.5 w-3.5" strokeWidth={1.8} />
+      </span>
+      <span
+        className={cn(
+          "grid h-7 w-7 place-items-center rounded-[6px] transition-all",
+          !isLight
+            ? "bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.28)] ring-1 ring-border/70"
+            : "text-muted-foreground/80 group-hover:text-foreground",
+        )}
+      >
+        <Moon className="h-3.5 w-3.5" strokeWidth={1.8} />
+      </span>
+    </button>
   );
 }
 
@@ -444,7 +553,7 @@ function QualityLookup({
 
       <FieldBlock id="lote-calidad" label="N° de lote">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#A8B1FF]" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5E6AD2] dark:text-[#A8B1FF]" />
           <Input
             id="lote-calidad"
             value={lotQuery}
@@ -512,7 +621,7 @@ function QualityTracePanel({
     <section className="min-w-0">
       <div className="grid gap-3 border-b border-border/70 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5">
         <div className="flex min-w-0 items-center gap-3">
-          <FileText className="h-4 w-4 shrink-0 text-[#A8B1FF]" />
+          <FileText className="h-4 w-4 shrink-0 text-[#5E6AD2] dark:text-[#A8B1FF]" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-[16px] font-semibold text-foreground">
@@ -568,7 +677,7 @@ function QualityPaletCard({
     <div
       className={cn(
         "overflow-hidden rounded-lg border bg-card/70 transition-colors",
-        isSelectedPalet ? "border-[#A8B1FF]/70" : "border-border/80",
+        isSelectedPalet ? "border-[#5E6AD2]/70 dark:border-[#A8B1FF]/70" : "border-border/80",
       )}
     >
       <button
@@ -577,7 +686,7 @@ function QualityPaletCard({
         onClick={onSelectPalet}
       >
         <div className="flex min-w-0 items-center gap-3">
-          <Layers3 className="h-4 w-4 shrink-0 text-[#A8B1FF]" />
+          <Layers3 className="h-4 w-4 shrink-0 text-[#5E6AD2] dark:text-[#A8B1FF]" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-mono text-[13.5px] font-semibold text-foreground">
@@ -640,11 +749,13 @@ function BatchTile({
       className={cn(
         "flex h-8 min-w-8 items-center justify-center rounded-md border px-2 font-mono text-[12px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
         status === "accepted" &&
-          "border-emerald-400/70 bg-emerald-400/18 text-emerald-200 hover:bg-emerald-400/24",
-        status === "rejected" && "border-red-400/75 bg-red-400/18 text-red-200 hover:bg-red-400/24",
+          "border-emerald-500/60 bg-emerald-500/12 text-emerald-700 hover:bg-emerald-500/18 dark:border-emerald-400/70 dark:bg-emerald-400/18 dark:text-emerald-200 dark:hover:bg-emerald-400/24",
+        status === "rejected" &&
+          "border-red-500/60 bg-red-500/12 text-red-700 hover:bg-red-500/18 dark:border-red-400/75 dark:bg-red-400/18 dark:text-red-200 dark:hover:bg-red-400/24",
         !status &&
-          "border-border/80 bg-background/45 text-foreground hover:border-[#A8B1FF]/60 hover:bg-[#5E6AD2]/10",
-        isSelected && "ring-2 ring-[#A8B1FF]/70 ring-offset-2 ring-offset-card",
+          "border-border/80 bg-background/45 text-foreground hover:border-[#5E6AD2]/60 hover:bg-[#5E6AD2]/10 dark:hover:border-[#A8B1FF]/60",
+        isSelected &&
+          "ring-2 ring-[#5E6AD2]/70 ring-offset-2 ring-offset-card dark:ring-[#A8B1FF]/70",
       )}
       onClick={onClick}
     >
@@ -668,6 +779,7 @@ function BatchDecisionPanel({
   onStatusChange,
   onObservationChange,
   onFinishInspection,
+  onFinishTurn,
 }: {
   batch?: ReceivedBatch;
   palet?: ReceivedPalet;
@@ -683,13 +795,14 @@ function BatchDecisionPanel({
   onStatusChange: (status: BatchStatus) => void;
   onObservationChange: (value: string) => void;
   onFinishInspection: () => void;
+  onFinishTurn: () => void;
 }) {
   return (
     <aside className="flex min-w-0 lg:min-h-[640px]">
       <div className="flex w-full flex-col overflow-hidden rounded-lg border border-border/80 bg-background/35 lg:min-h-[640px]">
         <div className="border-b border-border/70 px-4 py-4">
           <div className="flex items-center gap-2 text-[13px] font-semibold uppercase tracking-[0.04em] text-foreground">
-            <Boxes className="h-4 w-4 text-[#A8B1FF]" />
+            <Boxes className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
             Batch
           </div>
           {lot && palet ? (
@@ -718,11 +831,11 @@ function BatchDecisionPanel({
                 <div className="min-w-0 text-center">
                   <div
                     className={cn(
-                      "mx-auto flex h-36 w-36 items-center justify-center rounded-lg border border-[#A8B1FF]/40 bg-[#5E6AD2]/12 font-mono text-[72px] font-semibold leading-none text-foreground shadow-inner shadow-black/20",
+                      "mx-auto flex h-36 w-36 items-center justify-center rounded-lg border border-[#5E6AD2]/35 bg-[#5E6AD2]/10 font-mono text-[72px] font-semibold leading-none text-foreground shadow-inner shadow-black/10 dark:border-[#A8B1FF]/40 dark:bg-[#5E6AD2]/12 dark:shadow-black/20",
                       decision?.status === "accepted" &&
-                        "border-emerald-300/80 bg-emerald-400/22 text-emerald-100",
+                        "border-emerald-500/55 bg-emerald-500/14 text-emerald-700 dark:border-emerald-300/80 dark:bg-emerald-400/22 dark:text-emerald-100",
                       decision?.status === "rejected" &&
-                        "border-red-300/85 bg-red-400/22 text-red-100",
+                        "border-red-500/60 bg-red-500/14 text-red-700 dark:border-red-300/85 dark:bg-red-400/22 dark:text-red-100",
                     )}
                   >
                     {batch.code}
@@ -743,28 +856,44 @@ function BatchDecisionPanel({
                 </Button>
               </div>
 
-              <div className="mt-8 flex justify-center gap-8">
+              <div className="mx-auto mt-8 grid w-full max-w-md grid-cols-2 gap-6">
                 <Button
                   type="button"
+                  aria-label="Aprobar batch. Presioná A"
                   className={cn(
-                    "h-20 w-20 rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 focus-visible:ring-0 focus-visible:ring-offset-0 [&_svg]:!h-7 [&_svg]:!w-7",
-                    decision?.status === "accepted" && "ring-2 ring-emerald-200/80",
+                    "h-20 w-full justify-between rounded-lg bg-emerald-500 px-5 text-white shadow-sm transition-all duration-150 hover:bg-emerald-400 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-0 [&_svg]:!h-[21px] [&_svg]:!w-[21px]",
+                    decision?.status === "accepted" &&
+                      "ring-2 ring-emerald-500/35 dark:ring-emerald-200/80",
                   )}
                   onClick={() => onStatusChange("accepted")}
-                  title="Aceptar batch"
+                  title="Aprobar batch"
                 >
-                  <Check />
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <Check strokeWidth={2.5} />
+                    <span className="truncate text-[15px] font-semibold tracking-normal">
+                      Aprobar
+                    </span>
+                  </span>
+                  <ShortcutKey tone="accepted">A</ShortcutKey>
                 </Button>
                 <Button
                   type="button"
+                  aria-label="Rechazar batch. Presioná R"
                   className={cn(
-                    "h-20 w-20 rounded-lg bg-red-500 text-white hover:bg-red-400 focus-visible:ring-0 focus-visible:ring-offset-0 [&_svg]:!h-7 [&_svg]:!w-7",
-                    decision?.status === "rejected" && "ring-2 ring-red-200/80",
+                    "h-20 w-full justify-between rounded-lg bg-red-500 px-5 text-white shadow-sm transition-all duration-150 hover:bg-red-400 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-red-500/50 focus-visible:ring-offset-0 [&_svg]:!h-[21px] [&_svg]:!w-[21px]",
+                    decision?.status === "rejected" &&
+                      "ring-2 ring-red-500/35 dark:ring-red-200/80",
                   )}
                   onClick={() => onStatusChange("rejected")}
                   title="Rechazar batch"
                 >
-                  <XCircle />
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <XCircle strokeWidth={2.5} />
+                    <span className="truncate text-[15px] font-semibold tracking-normal">
+                      Rechazar
+                    </span>
+                  </span>
+                  <ShortcutKey tone="rejected">R</ShortcutKey>
                 </Button>
               </div>
             </div>
@@ -793,7 +922,15 @@ function BatchDecisionPanel({
               </div>
             ) : null}
 
-            <div className="mt-4 border-t border-border/70 pt-4">
+            <div className="mt-4 grid grid-cols-1 gap-3 border-t border-border/70 pt-4 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-12 rounded-lg text-[13px] font-semibold transition-colors focus-visible:ring-0 focus-visible:ring-offset-0"
+                onClick={onFinishTurn}
+              >
+                Finalizar turno
+              </Button>
               <Button
                 type="button"
                 className={cn(
@@ -827,6 +964,21 @@ function BatchDecisionPanel({
   );
 }
 
+function ShortcutKey({ children, tone }: { children: ReactNode; tone: BatchStatus }) {
+  return (
+    <kbd
+      aria-hidden="true"
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded border px-2 py-0.5 font-mono text-[11px] font-semibold leading-none no-underline shadow-none",
+        tone === "accepted" && "border-emerald-300/30 bg-emerald-700/55 text-emerald-50",
+        tone === "rejected" && "border-red-300/30 bg-red-700/55 text-red-50",
+      )}
+    >
+      [{children}]
+    </kbd>
+  );
+}
+
 function FieldBlock({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return (
     <div>
@@ -856,7 +1008,7 @@ function EmptyQualityState({
         className,
       )}
     >
-      <Icon className="mx-auto h-7 w-7 text-[#A8B1FF]" />
+      <Icon className="mx-auto h-7 w-7 text-[#5E6AD2] dark:text-[#A8B1FF]" />
       <div className="mt-4 text-[14px] font-semibold text-foreground">{title}</div>
       <p className="mx-auto mt-2 max-w-sm text-[12.5px] leading-relaxed text-muted-foreground">
         {message}
@@ -879,9 +1031,12 @@ function StatusBadge({ status, compact }: { status: RollupStatus; compact?: bool
         "rounded-md border px-2 py-0.5 font-medium",
         compact ? "text-[10.5px]" : "text-[11px]",
         status === "pending" && "border-border/80 bg-background/40 text-muted-foreground",
-        status === "partial" && "border-amber-400/50 bg-amber-400/12 text-amber-200",
-        status === "accepted" && "border-emerald-400/50 bg-emerald-400/12 text-emerald-200",
-        status === "rejected" && "border-red-400/60 bg-red-400/14 text-red-200",
+        status === "partial" &&
+          "border-amber-500/45 bg-amber-500/10 text-amber-700 dark:border-amber-400/50 dark:bg-amber-400/12 dark:text-amber-200",
+        status === "accepted" &&
+          "border-emerald-500/45 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/50 dark:bg-emerald-400/12 dark:text-emerald-200",
+        status === "rejected" &&
+          "border-red-500/50 bg-red-500/10 text-red-700 dark:border-red-400/60 dark:bg-red-400/14 dark:text-red-200",
       )}
     >
       {labels[status]}
@@ -892,7 +1047,7 @@ function StatusBadge({ status, compact }: { status: RollupStatus; compact?: bool
 function StatusLine({ status }: { status?: BatchStatus }) {
   if (status === "accepted") {
     return (
-      <div className="mt-3 flex items-center justify-center gap-1.5 text-[12.5px] font-medium text-emerald-200">
+      <div className="mt-3 flex items-center justify-center gap-1.5 text-[12.5px] font-medium text-emerald-700 dark:text-emerald-200">
         <CheckCircle2 className="h-4 w-4" />
         Aprobado
       </div>
@@ -901,7 +1056,7 @@ function StatusLine({ status }: { status?: BatchStatus }) {
 
   if (status === "rejected") {
     return (
-      <div className="mt-3 flex items-center justify-center gap-1.5 text-[12.5px] font-medium text-red-200">
+      <div className="mt-3 flex items-center justify-center gap-1.5 text-[12.5px] font-medium text-red-700 dark:text-red-200">
         <XCircle className="h-4 w-4" />
         Rechazado
       </div>
@@ -940,8 +1095,8 @@ function QualityMetric({
       <div
         className={cn(
           "font-semibold",
-          tone === "accepted" && "text-emerald-200",
-          tone === "rejected" && "text-red-200",
+          tone === "accepted" && "text-emerald-700 dark:text-emerald-200",
+          tone === "rejected" && "text-red-700 dark:text-red-200",
           !tone && "text-foreground",
         )}
       >
@@ -1191,7 +1346,7 @@ function formatDate(value: string) {
 }
 
 function materialLabel(material: (typeof bandMaterials)[number]) {
-  return `${material.code} · ${material.description}`;
+  return material.code;
 }
 
 function pluralize(count: number, singular: string, plural: string) {
