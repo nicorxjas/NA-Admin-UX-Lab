@@ -63,7 +63,7 @@ export function RfidScanModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="rfid-scan-heading"
-        className="relative w-full max-w-[440px] overflow-hidden rounded-lg border border-border/80 bg-card shadow-[0_24px_80px_rgb(15_23_42/0.14)] dark:shadow-2xl dark:shadow-black/45"
+        className="relative w-full max-w-[440px] overflow-hidden rounded-lg border border-border/80 bg-card shadow-[0_24px_80px_rgb(15_23_42/0.16)] dark:shadow-2xl dark:shadow-black/45"
       >
         {onClose ? (
           <Button
@@ -117,7 +117,7 @@ export function RfidScanModal({
               }
             }}
             placeholder={placeholder}
-            className="h-12 w-full rounded-md border border-border/80 bg-background/45 px-3 text-center font-mono text-lg font-semibold tracking-widest text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-[#5E6AD2] focus:ring-2 focus:ring-[#5E6AD2]/25 dark:focus:border-[#A8B1FF]"
+            className="h-12 w-full rounded-md border border-border/80 bg-background/45 px-3 text-center font-mono text-lg font-semibold tracking-widest text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-[#5E6AD2] focus:ring-2 focus:ring-[#5E6AD2]/20 dark:focus:border-[#A8B1FF] dark:focus:ring-[#5E6AD2]/25"
           />
 
           {error ? (
@@ -138,7 +138,7 @@ export function RfidScanModal({
                   onClick={() => onAuth(name)}
                   className={cn(
                     "rounded-md border border-border/80 bg-background/45 px-3 py-2 text-left transition-colors",
-                    "hover:border-[#5E6AD2]/60 hover:bg-[#5E6AD2]/10 dark:hover:border-[#A8B1FF]/70",
+                    "hover:border-[#5E6AD2]/55 hover:bg-[#5E6AD2]/10 dark:hover:border-[#A8B1FF]/70",
                   )}
                 >
                   <div className="font-mono text-[11px] font-semibold text-[#5E6AD2] dark:text-[#A8B1FF]">

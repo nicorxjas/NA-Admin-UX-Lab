@@ -16,10 +16,11 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { MasterDataProvider } from "@/lib/master-store";
 
-const demoPath = "/calidad";
+const demoPaths = ["/recepcion", "/calidad", "/control-final"] as const;
+const fallbackDemoPath = "/recepcion";
 
 function isDemoPath(pathname: string) {
-  return pathname === demoPath;
+  return demoPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
 }
 
 function NotFoundComponent() {
@@ -31,10 +32,10 @@ function NotFoundComponent() {
         <p className="mt-2 text-sm text-muted-foreground">La ruta que buscas no existe.</p>
         <div className="mt-6">
           <Link
-            to={demoPath}
+            to={fallbackDemoPath}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Volver a calidad
+            Volver a recepción
           </Link>
         </div>
       </div>
@@ -69,10 +70,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             Reintentar
           </button>
           <a
-            href={demoPath}
+            href={fallbackDemoPath}
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Ir a calidad
+            Ir a recepción
           </a>
         </div>
       </div>
@@ -85,7 +86,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     if (isDemoPath(location.pathname)) return;
 
     throw redirect({
-      to: demoPath,
+      to: fallbackDemoPath,
       replace: true,
     });
   },
