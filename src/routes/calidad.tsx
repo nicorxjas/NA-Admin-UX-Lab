@@ -162,7 +162,7 @@ type ReceivedLot = {
 };
 
 type BatchStatus = "accepted" | "rejected";
-type RollupStatus = "pending" | "partial" | "accepted" | "rejected";
+type RollupStatus = "pending" | "accepted" | "rejected";
 
 type BatchDecision = {
   status?: BatchStatus;
@@ -1020,7 +1020,6 @@ function EmptyQualityState({
 function StatusBadge({ status, compact }: { status: RollupStatus; compact?: boolean }) {
   const labels: Record<RollupStatus, string> = {
     pending: "Pendiente",
-    partial: "Parcial",
     accepted: "Aprobado",
     rejected: "Rechazado",
   };
@@ -1031,8 +1030,6 @@ function StatusBadge({ status, compact }: { status: RollupStatus; compact?: bool
         "rounded-md border px-2 py-0.5 font-medium",
         compact ? "text-[10.5px]" : "text-[11px]",
         status === "pending" && "border-border/80 bg-background/40 text-muted-foreground",
-        status === "partial" &&
-          "border-amber-500/45 bg-amber-500/10 text-amber-700 dark:border-amber-400/50 dark:bg-amber-400/12 dark:text-amber-200",
         status === "accepted" &&
           "border-emerald-500/45 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/50 dark:bg-emerald-400/12 dark:text-emerald-200",
         status === "rejected" &&
@@ -1188,11 +1185,9 @@ function getPaletQualityStatus(
     getBatchDecisionStatus(lotId, palet.id, batch.id, decisions),
   );
 
+  if (statuses.some((status) => !status)) return "pending";
   if (statuses.every((status) => status === "rejected")) return "rejected";
-  if (statuses.every((status) => status === "accepted")) return "accepted";
-  if (statuses.some(Boolean)) return "partial";
-
-  return "pending";
+  return "accepted";
 }
 
 function getLotQualityStatus(lot: ReceivedLot, decisions: BatchDecisionMap): RollupStatus {
@@ -1200,11 +1195,9 @@ function getLotQualityStatus(lot: ReceivedLot, decisions: BatchDecisionMap): Rol
 
   const statuses = lot.palets.map((palet) => getPaletQualityStatus(palet, lot.id, decisions));
 
+  if (statuses.some((status) => status === "pending")) return "pending";
   if (statuses.every((status) => status === "rejected")) return "rejected";
-  if (statuses.every((status) => status === "accepted")) return "accepted";
-  if (statuses.some((status) => status !== "pending")) return "partial";
-
-  return "pending";
+  return "accepted";
 }
 
 type QualityTotals = {
