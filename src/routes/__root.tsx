@@ -16,10 +16,10 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { MasterDataProvider } from "@/lib/master-store";
 
-const receptionOnlyDemoPath = "/recepcion";
+const demoPath = "/calidad";
 
-function isReceptionDemoPath(pathname: string) {
-  return pathname === receptionOnlyDemoPath || pathname.startsWith(`${receptionOnlyDemoPath}/`);
+function isDemoPath(pathname: string) {
+  return pathname === demoPath;
 }
 
 function NotFoundComponent() {
@@ -31,10 +31,10 @@ function NotFoundComponent() {
         <p className="mt-2 text-sm text-muted-foreground">La ruta que buscas no existe.</p>
         <div className="mt-6">
           <Link
-            to="/recepcion"
+            to={demoPath}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
-            Volver a recepción
+            Volver a calidad
           </Link>
         </div>
       </div>
@@ -69,10 +69,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
             Reintentar
           </button>
           <a
-            href="/recepcion"
+            href={demoPath}
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Ir a recepción
+            Ir a calidad
           </a>
         </div>
       </div>
@@ -82,10 +82,10 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   beforeLoad: ({ location }) => {
-    if (isReceptionDemoPath(location.pathname)) return;
+    if (isDemoPath(location.pathname)) return;
 
     throw redirect({
-      to: receptionOnlyDemoPath,
+      to: demoPath,
       replace: true,
     });
   },
@@ -141,20 +141,20 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const currentPath = useRouterState({ select: (state) => state.location.pathname });
-  const isReceptionRoute = isReceptionDemoPath(currentPath);
+  const isDemoRoute = isDemoPath(currentPath);
 
   return (
     <QueryClientProvider client={queryClient}>
       <MasterDataProvider>
         <div
           className={
-            isReceptionRoute
+            isDemoRoute
               ? "min-h-screen w-full bg-background text-foreground"
               : "flex min-h-screen w-full bg-background text-foreground"
           }
         >
-          {!isReceptionRoute && <AdminSidebar />}
-          <main className={isReceptionRoute ? "min-h-screen w-full" : "flex-1 min-w-0"}>
+          {!isDemoRoute && <AdminSidebar />}
+          <main className={isDemoRoute ? "min-h-screen w-full" : "flex-1 min-w-0"}>
             <Outlet />
           </main>
         </div>
