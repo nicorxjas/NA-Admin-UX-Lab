@@ -15,6 +15,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { MasterDataProvider } from "@/lib/master-store";
+import { ReceptionDataProvider } from "@/lib/reception-store";
 
 const receptionOnlyDemoPath = "/recepcion";
 
@@ -146,18 +147,20 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <MasterDataProvider>
-        <div
-          className={
-            isReceptionRoute
-              ? "min-h-screen w-full bg-background text-foreground"
-              : "flex min-h-screen w-full bg-background text-foreground"
-          }
-        >
-          {!isReceptionRoute && <AdminSidebar />}
-          <main className={isReceptionRoute ? "min-h-screen w-full" : "flex-1 min-w-0"}>
-            <Outlet />
-          </main>
-        </div>
+        <ReceptionDataProvider>
+          <div
+            className={
+              isReceptionRoute
+                ? "min-h-screen w-full bg-background text-foreground"
+                : "flex min-h-screen w-full bg-background text-foreground"
+            }
+          >
+            {!isReceptionRoute && <AdminSidebar />}
+            <main className={isReceptionRoute ? "min-h-screen w-full" : "flex-1 min-w-0"}>
+              <Outlet />
+            </main>
+          </div>
+        </ReceptionDataProvider>
       </MasterDataProvider>
     </QueryClientProvider>
   );

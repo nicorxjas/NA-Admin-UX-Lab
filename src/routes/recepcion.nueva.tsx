@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   Boxes,
   Building2,
@@ -15,7 +15,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { DateInput } from "@/components/ui/date-input";
@@ -29,9 +29,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RfidScanModal } from "@/components/hmi/RfidScanModal";
+import {
+  createReceptionMaterialDrafts,
+  receptionMaterialOptions,
+  useReceptionData,
+  type ReceptionMaterialEntry,
+  type ReceptionTraceLot,
+  type ReceptionTracePalet,
+} from "@/lib/reception-store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/recepcion/nueva")({
+  validateSearch: (search: Record<string, unknown>): { editId?: string } => ({
+    editId: typeof search.editId === "string" ? search.editId : undefined,
+  }),
   component: ReceptionRoute,
 });
 
@@ -41,49 +52,17 @@ const steps = [
   { number: 3, label: "Paso 3", title: "Confirmar", icon: ShieldCheck },
 ];
 
-const materials = [
-  {
-    code: "2006/1",
-    provider: "Química del Sur",
-    traceability: ["Lote", "Palet", "Batch"],
-  },
-  {
-    code: "2008/1",
-    provider: "Química del Sur",
-    traceability: ["Lote", "Palet", "Batch"],
-  },
-  {
-    code: "Tela Flux",
-    provider: "Telas S.A.",
-    traceability: ["Rollo"],
-  },
-];
+const materials = receptionMaterialOptions;
 
 const remitoExample = "R-0087421";
 
 type Material = (typeof materials)[number];
 
-type TracePalet = {
-  id: string;
-  code: string;
-  batches: string[];
-  expanded: boolean;
-};
+type TracePalet = ReceptionTracePalet;
 
-type TraceLot = {
-  id: string;
-  code: string;
-  palets: TracePalet[];
-  expanded: boolean;
-};
+type TraceLot = ReceptionTraceLot;
 
-type ReceiptMaterial = {
-  id: string;
-  materialCode: string;
-  lots: TraceLot[];
-  rolls: string[];
-  expanded: boolean;
-};
+type ReceiptMaterial = ReceptionMaterialEntry;
 
 type FieldError = {
   message: string;
@@ -97,15 +76,50 @@ type StepOneErrors = {
 };
 
 function ReceptionRoute() {
+  const navigate = useNavigate();
+  const { editId } = Route.useSearch();
+  const { receptions, createReception, updateReception } = useReceptionData();
+  const editingReception = editId
+    ? receptions.find((reception) => reception.id === editId)
+    : undefined;
+  const isEditMode = Boolean(editingReception);
   const [activeStep, setActiveStep] = useState(1);
   const [isConfirmed, setIsConfirmed] = useState(false);
-  const [isEntryUnlocked, setIsEntryUnlocked] = useState(false);
-  const [remito, setRemito] = useState("");
-  const [receptionDate, setReceptionDate] = useState("");
-  const [receiptMaterials, setReceiptMaterials] = useState<ReceiptMaterial[]>([]);
+  const [isEntryUnlocked, setIsEntryUnlocked] = useState(isEditMode);
+  const [remito, setRemito] = useState(editingReception?.remito ?? "");
+  const [receptionDate, setReceptionDate] = useState(editingReception?.receptionDate ?? "");
+  const [receiptMaterials, setReceiptMaterials] = useState<ReceiptMaterial[]>(() =>
+    editingReception ? createReceptionMaterialDrafts(editingReception.materials, true) : [],
+  );
   const [stepOneErrors, setStepOneErrors] = useState<StepOneErrors>({});
   const receptionProvider = getReceiptProviderLabel(receiptMaterials);
   const isAwaitingEntryAuth = !isConfirmed && !isEntryUnlocked;
+
+  useEffect(() => {
+    setIsConfirmed(false);
+    setActiveStep(1);
+    setStepOneErrors({});
+
+    if (editingReception) {
+      setIsEntryUnlocked(true);
+      setRemito(editingReception.remito);
+      setReceptionDate(editingReception.receptionDate);
+      setReceiptMaterials(createReceptionMaterialDrafts(editingReception.materials, true));
+      return;
+    }
+
+    if (editId) {
+      void navigate({ to: "/recepcion", replace: true });
+      return;
+    }
+
+    if (!editId) {
+      setIsEntryUnlocked(false);
+      setRemito("");
+      setReceptionDate("");
+      setReceiptMaterials([]);
+    }
+  }, [editId, editingReception?.id, navigate]);
 
   const updateRemito = (value: string) => {
     setRemito(value);
@@ -366,6 +380,32 @@ function ReceptionRoute() {
     setIsEntryUnlocked(false);
   };
 
+  const saveReception = () => {
+    const input = {
+      remito: remito.trim(),
+      receptionDate,
+      materials: receiptMaterials,
+    };
+
+    if (editingReception) {
+      updateReception(editingReception.id, input);
+      return;
+    }
+
+    createReception(input);
+  };
+
+  const returnToReceptionDashboard = () => {
+    void navigate({ to: "/recepcion" });
+  };
+
+  const registerAnotherReception = () => {
+    resetReception();
+    if (editId) {
+      void navigate({ to: "/recepcion/nueva", search: {}, replace: true });
+    }
+  };
+
   const handlePrimaryAction = () => {
     if (activeStep === 1) {
       const isRemitoMissing = !remito.trim();
@@ -405,6 +445,7 @@ function ReceptionRoute() {
       return;
     }
 
+    saveReception();
     setIsConfirmed(true);
   };
 
@@ -424,11 +465,19 @@ function ReceptionRoute() {
                   Recepción
                 </div>
                 <h1 className="text-[24px] font-semibold tracking-tight text-foreground sm:text-[28px]">
-                  {isConfirmed ? "Ingreso registrado" : "Nuevo ingreso de material"}
+                  {isConfirmed
+                    ? isEditMode
+                      ? "Ingreso actualizado"
+                      : "Ingreso registrado"
+                    : isEditMode
+                      ? "Editar ingreso de material"
+                      : "Nuevo ingreso de material"}
                 </h1>
                 <p className="mt-1 max-w-2xl text-[13.5px] leading-relaxed text-muted-foreground">
                   {isConfirmed
-                    ? "Los materiales quedan pendientes de aprobación de Calidad."
+                    ? isEditMode
+                      ? "Los cambios quedaron guardados en el panel de recepción."
+                      : "Los materiales quedan pendientes de aprobación de Calidad."
                     : activeStep === 1 && "Cargá remito, fecha y materiales incluidos."}
                   {!isConfirmed &&
                     activeStep === 2 &&
@@ -477,8 +526,9 @@ function ReceptionRoute() {
                   remito={remito}
                   provider={receptionProvider}
                   receiptMaterials={receiptMaterials}
-                  onFinishTurn={lockReceptionStart}
-                  onRegisterAnotherRequest={resetReception}
+                  isEditMode={isEditMode}
+                  onFinishTurn={isEditMode ? returnToReceptionDashboard : lockReceptionStart}
+                  onRegisterAnotherRequest={registerAnotherReception}
                 />
               ) : isAwaitingEntryAuth ? (
                 <LockedReceptionStart />
@@ -553,7 +603,11 @@ function ReceptionRoute() {
                       className="h-10 bg-[#5E6AD2] px-5 text-white hover:bg-[#6875E8]"
                       onClick={handlePrimaryAction}
                     >
-                      {activeStep === 3 ? "Confirmar" : "Continuar"}
+                      {activeStep === 3
+                        ? isEditMode
+                          ? "Guardar cambios"
+                          : "Confirmar"
+                        : "Continuar"}
                       {activeStep === 3 ? <ShieldCheck className="h-4 w-4" /> : null}
                     </Button>
                   </div>
@@ -719,12 +773,14 @@ function ConfirmedStep({
   remito,
   provider,
   receiptMaterials,
+  isEditMode,
   onFinishTurn,
   onRegisterAnotherRequest,
 }: {
   remito: string;
   provider: string;
   receiptMaterials: ReceiptMaterial[];
+  isEditMode: boolean;
   onFinishTurn: () => void;
   onRegisterAnotherRequest: () => void;
 }) {
@@ -756,15 +812,15 @@ function ConfirmedStep({
       </div>
 
       <h2 className="mt-7 text-[26px] font-semibold tracking-tight text-foreground sm:text-[30px]">
-        Ingreso registrado
+        {isEditMode ? "Ingreso actualizado" : "Ingreso registrado"}
       </h2>
       <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-muted-foreground">
         Remito <span className="font-semibold text-foreground">{displayRemito}</span> · Proveedor{" "}
         <span className="font-medium text-foreground">{displayProvider}</span>.
       </p>
       <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-        <span className="font-medium text-foreground/90">{traceSummary}</span> pendiente de
-        aprobación de Calidad.
+        <span className="font-medium text-foreground/90">{traceSummary}</span>{" "}
+        {isEditMode ? "guardados en el panel." : "pendiente de aprobación de Calidad."}
       </p>
 
       <div
@@ -781,7 +837,7 @@ function ConfirmedStep({
 
       <div className="mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row">
         <Button type="button" variant="secondary" className="h-10 flex-1" onClick={onFinishTurn}>
-          Finalizar turno
+          {isEditMode ? "Volver al panel" : "Finalizar turno"}
         </Button>
         <Button
           type="button"

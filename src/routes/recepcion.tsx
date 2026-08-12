@@ -1,123 +1,166 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Boxes, ChevronRight, FileText, Layers3, Plus, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
-
-import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetClose,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Boxes,
+  CalendarDays,
+  Check,
+  ChevronRight,
+  Factory,
+  FileText,
+  Layers3,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  UserRound,
+  X,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  createReceptionSummary,
+  getLotBatchCount,
+  getMaterialBatchCount,
+  getMaterialPalletCount,
+  useReceptionData,
+  type ReceptionMaterialEntry,
+  type ReceptionSummary,
+  type ReceptionTraceLot,
+} from "@/lib/reception-store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/recepcion")({
   component: ReceptionDashboardRoute,
 });
 
-type TracePallet = {
-  code: string;
-  batches: string[];
-};
+type DateFilterValue =
+  | "today"
+  | "yesterday"
+  | "this-month"
+  | "last-7-days"
+  | "last-30-days"
+  | "last-3-months"
+  | "last-12-months";
 
-type TraceLot = {
-  code: string;
-  pallets: TracePallet[];
-};
+type ReceptionFilterKey = "date" | "materials" | "provider";
 
-type ReceptionMaterialTrace = {
-  code: string;
-  provider: string;
-  lots: TraceLot[];
-  rolls: string[];
-};
-
-type ReceptionSeed = {
-  id: string;
-  remito: string;
-  dateTime: string;
-  traceMaterials: ReceptionMaterialTrace[];
-};
-
-type ReceptionSummary = ReceptionSeed & {
-  materials: string[];
-  provider: string;
-  rolls: number;
-  lots: number;
-  pallets: number;
-  batch: number;
-};
-
-const rawReceptionRows: ReceptionSeed[] = [
-  {
-    id: "REC-20260805-001",
-    remito: "R-0087421",
-    dateTime: "05/08/2026 09:24",
-    traceMaterials: [
-      {
-        code: "2006/1",
-        provider: "Química del Sur",
-        lots: [createLot("1001", 1, 1), createLot("1002", 4, 10)],
-        rolls: [],
-      },
-      {
-        code: "2008/1",
-        provider: "Química del Sur",
-        lots: [createLot("2001", 7, 19), createLot("2002", 10, 28)],
-        rolls: [],
-      },
-      {
-        code: "Tela Flux",
-        provider: "Telas S.A.",
-        lots: [],
-        rolls: createCodeRange(101, 18),
-      },
-    ],
-  },
-  {
-    id: "REC-20260805-002",
-    remito: "R-0087422",
-    dateTime: "05/08/2026 11:10",
-    traceMaterials: [
-      {
-        code: "2006/1",
-        provider: "Química del Sur",
-        lots: [createLot("3001", 21, 1), createLot("3002", 24, 10)],
-        rolls: [],
-      },
-    ],
-  },
-  {
-    id: "REC-20260805-003",
-    remito: "R-0087423",
-    dateTime: "05/08/2026 14:42",
-    traceMaterials: [
-      {
-        code: "Tela Flux",
-        provider: "Telas S.A.",
-        lots: [],
-        rolls: createCodeRange(201, 24),
-      },
-    ],
-  },
-];
-
-const receptionRows: ReceptionSummary[] = rawReceptionRows.map(createReceptionSummary);
-
-const dashboardCards = [
-  { label: "Remitos", value: receptionRows.length },
-  { label: "Rollos", value: sumReceptionValue("rolls") },
-  { label: "Lotes", value: sumReceptionValue("lots") },
-  { label: "Pallets", value: sumReceptionValue("pallets") },
-  { label: "Batch", value: sumReceptionValue("batch") },
+const dateFilterOptions: { value: DateFilterValue; label: string }[] = [
+  { value: "today", label: "Hoy" },
+  { value: "yesterday", label: "Ayer" },
+  { value: "this-month", label: "Este mes" },
+  { value: "last-7-days", label: "Últimos 7 días" },
+  { value: "last-30-days", label: "Últimos 30 días" },
+  { value: "last-3-months", label: "Últimos 3 meses" },
+  { value: "last-12-months", label: "Últimos 12 meses" },
 ];
 
 function ReceptionDashboardRoute() {
   const currentPath = useRouterState({ select: (state) => state.location.pathname });
+  const { receptions, deleteReception } = useReceptionData();
+  const receptionRows = receptions.map(createReceptionSummary);
+  const dashboardCards = [
+    { label: "Remitos", value: receptionRows.length },
+    { label: "Rollos", value: sumReceptionValue(receptionRows, "rolls") },
+    { label: "Lotes", value: sumReceptionValue(receptionRows, "lots") },
+    { label: "Pallets", value: sumReceptionValue(receptionRows, "pallets") },
+    { label: "Batch", value: sumReceptionValue(receptionRows, "batch") },
+  ];
   const [selectedReceptionId, setSelectedReceptionId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateFilterValue | null>(null);
+  const [materialFilters, setMaterialFilters] = useState<string[]>([]);
+  const [providerFilters, setProviderFilters] = useState<string[]>([]);
   const selectedReception = receptionRows.find((row) => row.id === selectedReceptionId);
+  const materialFilterOptions = useMemo(
+    () => Array.from(new Set(receptionRows.flatMap((row) => row.materials))).sort(),
+    [receptionRows],
+  );
+  const providerFilterOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          receptionRows.flatMap((row) =>
+            row.provider
+              .split(",")
+              .map((provider) => provider.trim())
+              .filter(Boolean),
+          ),
+        ),
+      ).sort(),
+    [receptionRows],
+  );
+  const filteredReceptionRows = useMemo(
+    () =>
+      receptionRows.filter((row) => {
+        const needle = searchQuery.trim().toLowerCase();
+        const matchesSearch =
+          !needle ||
+          row.remito.toLowerCase().includes(needle) ||
+          row.provider.toLowerCase().includes(needle) ||
+          row.materials.some((material) => material.toLowerCase().includes(needle));
+        const matchesDate = !dateFilter || matchesDateFilter(row.receptionDate, dateFilter);
+        const matchesMaterial =
+          materialFilters.length === 0 ||
+          materialFilters.some((material) => row.materials.includes(material));
+        const rowProviders = row.provider
+          .split(",")
+          .map((provider) => provider.trim())
+          .filter(Boolean);
+        const matchesProvider =
+          providerFilters.length === 0 ||
+          providerFilters.some((provider) => rowProviders.includes(provider));
+
+        return matchesSearch && matchesDate && matchesMaterial && matchesProvider;
+      }),
+    [dateFilter, materialFilters, providerFilters, receptionRows, searchQuery],
+  );
+  const activeFilterCount = [
+    Boolean(dateFilter),
+    materialFilters.length > 0,
+    providerFilters.length > 0,
+  ].filter(Boolean).length;
+  const hasActiveFilters = activeFilterCount > 0;
+  const dateFilterLabel = dateFilter
+    ? dateFilterOptions.find((option) => option.value === dateFilter)?.label
+    : undefined;
+
+  const clearFilters = () => {
+    setDateFilter(null);
+    setMaterialFilters([]);
+    setProviderFilters([]);
+  };
+
+  const toggleMaterialFilter = (material: string) => {
+    setMaterialFilters((current) =>
+      current.includes(material)
+        ? current.filter((value) => value !== material)
+        : [...current, material],
+    );
+  };
+
+  const toggleProviderFilter = (provider: string) => {
+    setProviderFilters((current) =>
+      current.includes(provider)
+        ? current.filter((value) => value !== provider)
+        : [...current, provider],
+    );
+  };
 
   if (currentPath !== "/recepcion" && currentPath !== "/recepcion/") {
     return <Outlet />;
@@ -133,7 +176,7 @@ function ReceptionDashboardRoute() {
           <Button
             asChild
             size="sm"
-            className="h-8 gap-1.5 bg-foreground text-background hover:bg-foreground/90"
+            className="h-8 gap-1.5 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
           >
             <Link to="/recepcion/nueva">
               <Plus className="h-3.5 w-3.5" />
@@ -157,21 +200,117 @@ function ReceptionDashboardRoute() {
           ))}
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-lg border border-border/70 bg-card">
+        <div className="mt-6 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[260px] flex-1 sm:max-w-md">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Buscar remito, materiales o proveedor"
+                className="h-9 border-border/70 bg-card pl-9 pr-9 text-[13px]"
+              />
+              {searchQuery ? (
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+                  aria-label="Limpiar búsqueda"
+                  onClick={() => setSearchQuery("")}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className={cn(
+                "h-9 gap-2 border-border/70 bg-card px-3 text-[13px] hover:bg-accent/60",
+                filtersOpen && "border-border/80 bg-accent/65 text-foreground",
+              )}
+              onClick={() => setFiltersOpen((current) => !current)}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filtros
+              {activeFilterCount > 0 ? (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-[11px] font-semibold text-foreground">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </Button>
+            <div className="ml-auto text-[12px] text-muted-foreground">
+              {filteredReceptionRows.length} de {receptionRows.length}
+            </div>
+          </div>
+
+          {filtersOpen ? (
+            <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-card px-3 py-2">
+              {dateFilter && dateFilterLabel ? (
+                <ReceptionFilterPill
+                  label="Fecha"
+                  operator="es"
+                  value={dateFilterLabel}
+                  onClear={() => setDateFilter(null)}
+                />
+              ) : null}
+              {materialFilters.length > 0 ? (
+                <ReceptionFilterPill
+                  label="Materiales"
+                  operator="contiene"
+                  value={formatMultiFilterValue(materialFilters)}
+                  onClear={() => setMaterialFilters([])}
+                />
+              ) : null}
+              {providerFilters.length > 0 ? (
+                <ReceptionFilterPill
+                  label="Proveedor"
+                  operator="es"
+                  value={formatMultiFilterValue(providerFilters)}
+                  onClear={() => setProviderFilters([])}
+                />
+              ) : null}
+
+              <ReceptionAddFilterPopover
+                dateFilter={dateFilter}
+                materialFilters={materialFilters}
+                providerFilters={providerFilters}
+                materialOptions={materialFilterOptions}
+                providerOptions={providerFilterOptions}
+                onDateFilterChange={setDateFilter}
+                onMaterialFilterToggle={toggleMaterialFilter}
+                onProviderFilterToggle={toggleProviderFilter}
+              />
+
+              <Button
+                type="button"
+                variant="ghost"
+                className="ml-auto h-8 px-3 text-[12.5px] text-muted-foreground hover:text-foreground"
+                disabled={!hasActiveFilters}
+                onClick={clearFilters}
+              >
+                Limpiar filtros
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="mt-3 overflow-hidden rounded-lg border border-border/70 bg-card">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1040px] table-fixed border-collapse text-[13px]">
+            <table className="w-full min-w-[1160px] table-fixed border-collapse text-[13px]">
               <colgroup>
-                <col className="w-[16%]" />
-                <col className="w-[25%]" />
-                <col className="w-[19%]" />
-                <col className="w-[10%]" />
-                <col className="w-[10%]" />
-                <col className="w-[10%]" />
-                <col className="w-[10%]" />
+                <col className="w-[15%]" />
+                <col className="w-[14%]" />
+                <col className="w-[22%]" />
+                <col className="w-[17%]" />
+                <col className="w-[8%]" />
+                <col className="w-[8%]" />
+                <col className="w-[8%]" />
+                <col className="w-[8%]" />
               </colgroup>
               <thead>
                 <tr className="border-b border-border/70 bg-background/40">
                   <HeaderCell className="whitespace-nowrap">Fecha y hora</HeaderCell>
+                  <HeaderCell>Remito</HeaderCell>
                   <HeaderCell>Materiales</HeaderCell>
                   <HeaderCell>Proveedor</HeaderCell>
                   <HeaderCell>Rollos</HeaderCell>
@@ -181,47 +320,58 @@ function ReceptionDashboardRoute() {
                 </tr>
               </thead>
               <tbody>
-                {receptionRows.map((row) => (
-                  <tr
-                    key={row.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Ver detalle de recepción ${row.remito}`}
-                    className={cn(
-                      "cursor-pointer border-b border-border/50 outline-none transition-colors last:border-0 hover:bg-accent/40 focus-visible:bg-accent/45 focus-visible:ring-1 focus-visible:ring-ring",
-                      selectedReceptionId === row.id && "bg-accent/35",
-                    )}
-                    onClick={() => setSelectedReceptionId(row.id)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") return;
-                      event.preventDefault();
-                      setSelectedReceptionId(row.id);
-                    }}
-                  >
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-[12.5px] text-foreground">
-                      {row.dateTime}
+                {filteredReceptionRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                      Sin recepciones para la búsqueda o filtros actuales.
                     </td>
-                    <td className="px-4 py-3 text-foreground/90">
-                      <div className="flex flex-wrap gap-1.5">
-                        {row.materials.map((material) => (
-                          <span
-                            key={`${row.id}-${material}`}
-                            className="rounded-md border border-border/70 bg-background/40 px-2 py-0.5 font-mono text-[11.5px] text-foreground"
-                          >
-                            {material}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="truncate px-4 py-3 text-foreground/90" title={row.provider}>
-                      {row.provider}
-                    </td>
-                    <MetricCell value={row.rolls} />
-                    <MetricCell value={row.lots} />
-                    <MetricCell value={row.pallets} />
-                    <MetricCell value={row.batch} />
                   </tr>
-                ))}
+                ) : (
+                  filteredReceptionRows.map((row) => (
+                    <tr
+                      key={row.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Ver detalle de recepción ${row.remito}`}
+                      className={cn(
+                        "cursor-pointer border-b border-border/50 outline-none transition-colors last:border-0 hover:bg-accent/40 focus-visible:bg-accent/45 focus-visible:ring-1 focus-visible:ring-ring",
+                        selectedReceptionId === row.id && "bg-accent/35",
+                      )}
+                      onClick={() => setSelectedReceptionId(row.id)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") return;
+                        event.preventDefault();
+                        setSelectedReceptionId(row.id);
+                      }}
+                    >
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-[12.5px] text-foreground">
+                        {row.dateTime}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-[12.5px] text-foreground">
+                        {row.remito}
+                      </td>
+                      <td className="px-4 py-3 text-foreground/90">
+                        <div className="flex flex-wrap gap-1.5">
+                          {row.materials.map((material) => (
+                            <span
+                              key={`${row.id}-${material}`}
+                              className="rounded-md border border-border/70 bg-background/40 px-2 py-0.5 font-mono text-[11.5px] text-foreground"
+                            >
+                              {material}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="truncate px-4 py-3 text-foreground/90" title={row.provider}>
+                        {row.provider}
+                      </td>
+                      <MetricCell value={row.rolls} />
+                      <MetricCell value={row.lots} />
+                      <MetricCell value={row.pallets} />
+                      <MetricCell value={row.batch} />
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -235,9 +385,311 @@ function ReceptionDashboardRoute() {
           onOpenChange={(open) => {
             if (!open) setSelectedReceptionId(null);
           }}
+          onDelete={() => {
+            deleteReception(selectedReception.id);
+            setSelectedReceptionId(null);
+          }}
         />
       ) : null}
     </div>
+  );
+}
+
+function ReceptionFilterPill({
+  label,
+  operator,
+  value,
+  onClear,
+}: {
+  label: string;
+  operator: string;
+  value: string;
+  onClear: () => void;
+}) {
+  return (
+    <div className="inline-flex h-8 max-w-full items-center overflow-hidden rounded-full border border-border/70 bg-background/45 text-[12.5px] shadow-sm">
+      <span className="px-3 font-medium text-foreground">{label}</span>
+      <span className="border-l border-border/70 bg-card/70 px-2.5 text-muted-foreground">
+        {operator}
+      </span>
+      <span className="max-w-[180px] truncate border-l border-border/70 px-3 font-medium text-foreground">
+        {value}
+      </span>
+      <button
+        type="button"
+        className="flex h-full w-8 items-center justify-center border-l border-border/70 text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+        aria-label={`Quitar filtro ${label}`}
+        onClick={onClear}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function ReceptionAddFilterPopover({
+  dateFilter,
+  materialFilters,
+  providerFilters,
+  materialOptions,
+  providerOptions,
+  onDateFilterChange,
+  onMaterialFilterToggle,
+  onProviderFilterToggle,
+}: {
+  dateFilter: DateFilterValue | null;
+  materialFilters: string[];
+  providerFilters: string[];
+  materialOptions: string[];
+  providerOptions: string[];
+  onDateFilterChange: (value: DateFilterValue) => void;
+  onMaterialFilterToggle: (value: string) => void;
+  onProviderFilterToggle: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<ReceptionFilterKey | null>(null);
+  const [showOptionsOnRight, setShowOptionsOnRight] = useState(true);
+  const availableFilters = [
+    {
+      key: "date" as const,
+      label: "Fecha",
+      icon: CalendarDays,
+      disabled: false,
+    },
+    {
+      key: "materials" as const,
+      label: "Materiales",
+      icon: Factory,
+      disabled: materialOptions.length === 0,
+    },
+    {
+      key: "provider" as const,
+      label: "Proveedor",
+      icon: UserRound,
+      disabled: providerOptions.length === 0,
+    },
+  ];
+  const canAddFilter = availableFilters.some((filter) => !filter.disabled);
+
+  const close = () => {
+    setOpen(false);
+    setSelectedFilter(null);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+
+    const updatePlacement = () => {
+      const triggerRect = triggerRef.current?.getBoundingClientRect();
+      if (!triggerRect) return;
+
+      const menuWidth = 288;
+      const optionsWidth = 288;
+      const panelGap = 8;
+      const viewportGutter = 16;
+      const spaceToRight = window.innerWidth - triggerRect.left - viewportGutter;
+
+      setShowOptionsOnRight(spaceToRight >= menuWidth + optionsWidth + panelGap);
+    };
+
+    updatePlacement();
+    window.addEventListener("resize", updatePlacement);
+
+    return () => {
+      window.removeEventListener("resize", updatePlacement);
+    };
+  }, [open]);
+
+  const menuPanel = (
+    <div className="w-72 rounded-lg border border-border/80 bg-card p-1 shadow-xl">
+      {availableFilters.map((filter) => (
+        <FilterMenuButton
+          key={filter.key}
+          icon={filter.icon}
+          label={filter.label}
+          active={selectedFilter === filter.key}
+          disabled={filter.disabled}
+          onActivate={() => setSelectedFilter(filter.key)}
+        />
+      ))}
+    </div>
+  );
+
+  const optionPanel = selectedFilter ? (
+    <div className="w-72 rounded-lg border border-border/80 bg-card p-1 shadow-xl">
+      <FilterOptionPanel
+        filterKey={selectedFilter}
+        dateFilter={dateFilter}
+        materialFilters={materialFilters}
+        providerFilters={providerFilters}
+        materialOptions={materialOptions}
+        providerOptions={providerOptions}
+        onSelectDate={(value) => {
+          onDateFilterChange(value);
+          close();
+        }}
+        onToggleMaterial={onMaterialFilterToggle}
+        onToggleProvider={onProviderFilterToggle}
+      />
+    </div>
+  ) : null;
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen) setSelectedFilter(null);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          ref={triggerRef}
+          type="button"
+          variant="ghost"
+          className="h-8 gap-2 px-3 text-[12.5px] text-foreground hover:bg-accent/60"
+          disabled={!canAddFilter}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Agregar filtro
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align={showOptionsOnRight ? "start" : "end"}
+        className="flex w-auto items-start gap-2 border-0 bg-transparent p-0 shadow-none"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
+        {showOptionsOnRight ? (
+          <>
+            {menuPanel}
+            {optionPanel}
+          </>
+        ) : (
+          <>
+            {optionPanel}
+            {menuPanel}
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function FilterOptionPanel({
+  filterKey,
+  dateFilter,
+  materialFilters,
+  providerFilters,
+  materialOptions,
+  providerOptions,
+  onSelectDate,
+  onToggleMaterial,
+  onToggleProvider,
+}: {
+  filterKey: ReceptionFilterKey;
+  dateFilter: DateFilterValue | null;
+  materialFilters: string[];
+  providerFilters: string[];
+  materialOptions: string[];
+  providerOptions: string[];
+  onSelectDate: (value: DateFilterValue) => void;
+  onToggleMaterial: (value: string) => void;
+  onToggleProvider: (value: string) => void;
+}) {
+  const title =
+    filterKey === "date" ? "Fecha" : filterKey === "materials" ? "Materiales" : "Proveedor";
+  const options =
+    filterKey === "date"
+      ? dateFilterOptions
+      : filterKey === "materials"
+        ? materialOptions.map((value) => ({ value, label: value }))
+        : providerOptions.map((value) => ({ value, label: value }));
+
+  return (
+    <div>
+      <div className="mb-1 flex h-8 items-center px-3 text-[12.5px] font-medium text-muted-foreground">
+        {title}
+      </div>
+      <div className="space-y-1">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={cn(
+              "flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-[13px] text-foreground transition-colors hover:bg-accent/60",
+              isFilterOptionSelected({
+                filterKey,
+                value: option.value,
+                dateFilter,
+                materialFilters,
+                providerFilters,
+              }) && "bg-accent/45",
+            )}
+            onClick={() => {
+              if (filterKey === "date") {
+                onSelectDate(option.value as DateFilterValue);
+                return;
+              }
+              if (filterKey === "materials") {
+                onToggleMaterial(option.value);
+                return;
+              }
+              onToggleProvider(option.value);
+            }}
+          >
+            <span className="flex h-4 w-4 items-center justify-center">
+              {isFilterOptionSelected({
+                filterKey,
+                value: option.value,
+                dateFilter,
+                materialFilters,
+                providerFilters,
+              }) ? (
+                <Check className="h-3.5 w-3.5 text-[#A8B1FF]" />
+              ) : null}
+            </span>
+            <span className="min-w-0 truncate">{option.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FilterMenuButton({
+  icon: Icon,
+  label,
+  active,
+  disabled,
+  onActivate,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  active: boolean;
+  disabled: boolean;
+  onActivate: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex h-9 w-full items-center gap-2 rounded-md px-3 text-left text-[13px] transition-colors",
+        disabled
+          ? "cursor-not-allowed text-muted-foreground/50"
+          : active
+            ? "bg-accent/55 text-foreground"
+            : "text-foreground hover:bg-accent/60",
+      )}
+      disabled={disabled}
+      onMouseEnter={onActivate}
+      onFocus={onActivate}
+      onClick={onActivate}
+    >
+      <Icon className="h-4 w-4 text-muted-foreground" />
+      <span>{label}</span>
+      {!disabled ? <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" /> : null}
+    </button>
   );
 }
 
@@ -245,10 +697,12 @@ function ReceptionDetailSheet({
   reception,
   open,
   onOpenChange,
+  onDelete,
 }: {
   reception: ReceptionSummary;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onDelete: () => void;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -256,18 +710,6 @@ function ReceptionDetailSheet({
         side="right"
         className="w-full max-w-none overflow-visible border-border/80 bg-[#0e0f11] p-0 shadow-2xl [&>button:first-child]:hidden sm:w-[760px] sm:max-w-[760px]"
       >
-        <SheetClose asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="absolute right-7 top-6 z-[70] h-8 w-8 bg-[#0e0f11] text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-            title="Cerrar"
-            aria-label="Cerrar detalle"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </SheetClose>
         <Button
           type="button"
           variant="ghost"
@@ -279,22 +721,35 @@ function ReceptionDetailSheet({
         >
           <ChevronRight className="h-4 w-4" />
         </Button>
-        <div className="h-full overflow-y-auto px-6 pb-8 pt-6">
-          <SheetHeader className="pr-8">
-            <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#A8B1FF]">
-              <FileText className="h-3.5 w-3.5" />
-              Detalle Recepción
+        <div className="h-full overflow-y-auto px-6 pb-24 pt-6 [scrollbar-gutter:stable]">
+          <SheetHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#A8B1FF]">
+                  <FileText className="h-3.5 w-3.5" />
+                  Detalle Recepción
+                </div>
+                <SheetTitle className="text-[24px] font-semibold tracking-tight text-foreground">
+                  Remito Número {reception.remito}
+                </SheetTitle>
+              </div>
+              <SheetClose asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0 bg-[#0e0f11] text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                  title="Cerrar"
+                  aria-label="Cerrar detalle"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </SheetClose>
             </div>
-            <SheetTitle className="text-[24px] font-semibold tracking-tight text-foreground">
-              Remito Número {reception.remito}
-            </SheetTitle>
-            <SheetDescription className="text-[13px] leading-relaxed text-muted-foreground">
-              Fecha de recepción · {reception.dateTime}
-            </SheetDescription>
           </SheetHeader>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
-            <DetailMeta label="Remito" value={reception.remito} mono />
+            <DetailMeta label="Fecha de recepción" value={reception.dateTime} mono />
             <DetailMeta label="Proveedor" value={reception.provider} />
             <DetailMeta label="Materiales" value={String(reception.materials.length)} />
           </div>
@@ -306,19 +761,49 @@ function ReceptionDetailSheet({
             <PanelMetric label="Batch" value={String(reception.batch)} />
           </div>
 
-          <DetailSection
-            icon={<Boxes className="h-4 w-4 text-[#A8B1FF]" />}
-            title="Trazabilidad"
-          >
+          <DetailSection icon={<Boxes className="h-4 w-4 text-[#A8B1FF]" />} title="Trazabilidad">
             <TraceMaterialsSummary materials={reception.traceMaterials} />
           </DetailSection>
+        </div>
+        <div className="absolute bottom-0 left-0 right-4 z-[65] flex justify-end gap-2 border-t border-border/80 bg-[#0e0f11]/95 px-6 py-4 backdrop-blur">
+          <Button asChild type="button" variant="secondary" className="h-9 gap-2">
+            <Link to="/recepcion/nueva" search={{ editId: reception.id }}>
+              <Pencil className="h-4 w-4" />
+              Editar
+            </Link>
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button type="button" variant="destructive" className="h-9 gap-2">
+                <Trash2 className="h-4 w-4" />
+                Eliminar
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="z-[90] border-border/80 bg-card">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Eliminar recepción</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta acción elimina directamente el remito {reception.remito} del panel.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={onDelete}
+                >
+                  Eliminar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-function TraceMaterialsSummary({ materials }: { materials: ReceptionMaterialTrace[] }) {
+function TraceMaterialsSummary({ materials }: { materials: ReceptionMaterialEntry[] }) {
   if (materials.length === 0) {
     return (
       <div className="rounded-md border border-dashed border-border/80 bg-background/30 px-3 py-3 text-[12.5px] text-muted-foreground">
@@ -335,12 +820,15 @@ function TraceMaterialsSummary({ materials }: { materials: ReceptionMaterialTrac
         const isRollMaterial = material.rolls.length > 0;
 
         return (
-          <div key={material.code} className="rounded-md border border-border/70 bg-card/60 px-4 py-3">
+          <div
+            key={material.id}
+            className="rounded-md border border-border/70 bg-card/60 px-4 py-3"
+          >
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <div className="flex min-w-0 items-center gap-2">
                 <Boxes className="h-3.5 w-3.5 shrink-0 text-[#A8B1FF]" />
                 <span className="text-[15px] font-semibold text-foreground">
-                  Recepción Material {material.code}
+                  Recepción Material {material.materialCode}
                 </span>
               </div>
               {isRollMaterial ? (
@@ -368,7 +856,7 @@ function TraceMaterialsSummary({ materials }: { materials: ReceptionMaterialTrac
   );
 }
 
-function LotsTraceabilitySummary({ lots }: { lots: TraceLot[] }) {
+function LotsTraceabilitySummary({ lots }: { lots: ReceptionTraceLot[] }) {
   if (lots.length === 0) {
     return (
       <div className="mt-4 rounded-md border border-dashed border-border/80 bg-background/30 px-3 py-3 text-[12.5px] text-muted-foreground">
@@ -380,7 +868,10 @@ function LotsTraceabilitySummary({ lots }: { lots: TraceLot[] }) {
   return (
     <div className="mt-4 space-y-3">
       {lots.map((lot) => (
-        <div key={lot.code} className="rounded-md border border-border/70 bg-background/35 px-4 py-3">
+        <div
+          key={lot.code}
+          className="rounded-md border border-border/70 bg-background/35 px-4 py-3"
+        >
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <div className="flex min-w-0 items-center gap-2">
               <FileText className="h-3.5 w-3.5 shrink-0 text-[#A8B1FF]" />
@@ -389,13 +880,13 @@ function LotsTraceabilitySummary({ lots }: { lots: TraceLot[] }) {
               </span>
             </div>
             <span className="text-[12.5px] text-muted-foreground">
-              ({lot.pallets.length} {pluralize(lot.pallets.length, "pallet", "pallets")},{" "}
+              ({lot.palets.length} {pluralize(lot.palets.length, "pallet", "pallets")},{" "}
               {getLotBatchCount(lot)} batches)
             </span>
           </div>
 
           <div className="mt-4 space-y-4 border-l border-border/80 pl-4">
-            {lot.pallets.map((pallet) => (
+            {lot.palets.map((pallet) => (
               <div key={pallet.code}>
                 <div className="flex flex-wrap items-center gap-2">
                   <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
@@ -514,64 +1005,86 @@ function MetricCell({ value }: { value: number }) {
   return <td className="px-4 py-3 font-mono text-[12.5px] text-foreground">{value}</td>;
 }
 
-function createReceptionSummary(seed: ReceptionSeed): ReceptionSummary {
-  const providers = Array.from(new Set(seed.traceMaterials.map((material) => material.provider)));
-
-  return {
-    ...seed,
-    materials: seed.traceMaterials.map((material) => material.code),
-    provider: providers.join(", "),
-    rolls: getReceiptTotalRolls(seed.traceMaterials),
-    lots: getReceiptTotalLots(seed.traceMaterials),
-    pallets: getReceiptTotalPallets(seed.traceMaterials),
-    batch: getReceiptTotalBatches(seed.traceMaterials),
-  };
+function sumReceptionValue(rows: ReceptionSummary[], key: "rolls" | "lots" | "pallets" | "batch") {
+  return rows.reduce((total, row) => total + row[key], 0);
 }
 
-function createLot(code: string, firstPallet: number, firstBatch: number): TraceLot {
-  return {
-    code,
-    pallets: Array.from({ length: 3 }, (_, index) => ({
-      code: String(firstPallet + index).padStart(2, "0"),
-      batches: createCodeRange(firstBatch + index * 3, 3),
-    })),
-  };
+function formatMultiFilterValue(values: string[]) {
+  if (values.length <= 2) return values.join(", ");
+  return `${values[0]}, ${values[1]} +${values.length - 2}`;
 }
 
-function createCodeRange(start: number, count: number) {
-  return Array.from({ length: count }, (_, index) => String(start + index));
+function isFilterOptionSelected({
+  filterKey,
+  value,
+  dateFilter,
+  materialFilters,
+  providerFilters,
+}: {
+  filterKey: ReceptionFilterKey;
+  value: string;
+  dateFilter: DateFilterValue | null;
+  materialFilters: string[];
+  providerFilters: string[];
+}) {
+  if (filterKey === "date") return dateFilter === value;
+  if (filterKey === "materials") return materialFilters.includes(value);
+  return providerFilters.includes(value);
 }
 
-function getReceiptTotalRolls(materials: ReceptionMaterialTrace[]) {
-  return materials.reduce((total, material) => total + material.rolls.length, 0);
+function matchesDateFilter(receptionDate: string, filter: DateFilterValue) {
+  const date = parseLocalDate(receptionDate);
+  if (!date) return false;
+
+  const today = startOfDay(new Date());
+  const yesterday = addDays(today, -1);
+
+  if (filter === "today") return isSameDay(date, today);
+  if (filter === "yesterday") return isSameDay(date, yesterday);
+  if (filter === "this-month") {
+    return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth();
+  }
+
+  const rangeStart =
+    filter === "last-7-days"
+      ? addDays(today, -6)
+      : filter === "last-30-days"
+        ? addDays(today, -29)
+        : filter === "last-3-months"
+          ? addMonths(today, -3)
+          : addMonths(today, -12);
+
+  return date >= rangeStart && date <= today;
 }
 
-function getReceiptTotalLots(materials: ReceptionMaterialTrace[]) {
-  return materials.reduce((total, material) => total + material.lots.length, 0);
+function parseLocalDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return startOfDay(new Date(year, month - 1, day));
 }
 
-function getReceiptTotalPallets(materials: ReceptionMaterialTrace[]) {
-  return materials.reduce((total, material) => total + getMaterialPalletCount(material), 0);
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
-function getReceiptTotalBatches(materials: ReceptionMaterialTrace[]) {
-  return materials.reduce((total, material) => total + getMaterialBatchCount(material), 0);
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 }
 
-function getMaterialPalletCount(material: ReceptionMaterialTrace) {
-  return material.lots.reduce((total, lot) => total + lot.pallets.length, 0);
+function addMonths(date: Date, months: number) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
 }
 
-function getMaterialBatchCount(material: ReceptionMaterialTrace) {
-  return material.lots.reduce((total, lot) => total + getLotBatchCount(lot), 0);
-}
-
-function getLotBatchCount(lot: TraceLot) {
-  return lot.pallets.reduce((total, pallet) => total + pallet.batches.length, 0);
-}
-
-function sumReceptionValue(key: "rolls" | "lots" | "pallets" | "batch") {
-  return receptionRows.reduce((total, row) => total + row[key], 0);
+function isSameDay(left: Date, right: Date) {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
 }
 
 function pluralize(count: number, singular: string, plural: string) {
