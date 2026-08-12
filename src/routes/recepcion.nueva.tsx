@@ -28,7 +28,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RfidScanModal } from "@/components/hmi/RfidScanModal";
 import {
   createReceptionMaterialDrafts,
   receptionMaterialOptions,
@@ -85,7 +84,6 @@ function ReceptionRoute() {
   const isEditMode = Boolean(editingReception);
   const [activeStep, setActiveStep] = useState(1);
   const [isConfirmed, setIsConfirmed] = useState(false);
-  const [isEntryUnlocked, setIsEntryUnlocked] = useState(isEditMode);
   const [remito, setRemito] = useState(editingReception?.remito ?? "");
   const [receptionDate, setReceptionDate] = useState(editingReception?.receptionDate ?? "");
   const [receiptMaterials, setReceiptMaterials] = useState<ReceiptMaterial[]>(() =>
@@ -93,7 +91,6 @@ function ReceptionRoute() {
   );
   const [stepOneErrors, setStepOneErrors] = useState<StepOneErrors>({});
   const receptionProvider = getReceiptProviderLabel(receiptMaterials);
-  const isAwaitingEntryAuth = !isConfirmed && !isEntryUnlocked;
 
   useEffect(() => {
     setIsConfirmed(false);
@@ -101,7 +98,6 @@ function ReceptionRoute() {
     setStepOneErrors({});
 
     if (editingReception) {
-      setIsEntryUnlocked(true);
       setRemito(editingReception.remito);
       setReceptionDate(editingReception.receptionDate);
       setReceiptMaterials(createReceptionMaterialDrafts(editingReception.materials, true));
@@ -114,7 +110,6 @@ function ReceptionRoute() {
     }
 
     if (!editId) {
-      setIsEntryUnlocked(false);
       setRemito("");
       setReceptionDate("");
       setReceiptMaterials([]);
@@ -375,11 +370,6 @@ function ReceptionRoute() {
     setStepOneErrors({});
   };
 
-  const lockReceptionStart = () => {
-    resetReception();
-    setIsEntryUnlocked(false);
-  };
-
   const saveReception = () => {
     const input = {
       remito: remito.trim(),
@@ -449,10 +439,6 @@ function ReceptionRoute() {
     setIsConfirmed(true);
   };
 
-  const handleEntryAuth = () => {
-    setIsEntryUnlocked(true);
-  };
-
   return (
     <section className="min-h-screen bg-background px-4 py-5 text-foreground sm:px-6 lg:px-8">
       <div className="mx-auto flex min-h-[calc(100vh-2.5rem)] max-w-6xl items-center justify-center">
@@ -501,7 +487,7 @@ function ReceptionRoute() {
               </Button>
             </div>
 
-            {!isConfirmed && !isAwaitingEntryAuth ? (
+            {!isConfirmed ? (
               <ol className="linear-scrollbar mt-7 flex w-full items-center overflow-x-auto pb-1">
                 {steps.map((step, index) => (
                   <StepItem
@@ -527,11 +513,9 @@ function ReceptionRoute() {
                   provider={receptionProvider}
                   receiptMaterials={receiptMaterials}
                   isEditMode={isEditMode}
-                  onFinishTurn={isEditMode ? returnToReceptionDashboard : lockReceptionStart}
+                  onFinishTurn={returnToReceptionDashboard}
                   onRegisterAnotherRequest={registerAnotherReception}
                 />
-              ) : isAwaitingEntryAuth ? (
-                <LockedReceptionStart />
               ) : (
                 <>
                   {activeStep === 1 && (
@@ -573,7 +557,7 @@ function ReceptionRoute() {
               )}
             </div>
 
-            {!isConfirmed && !isAwaitingEntryAuth ? (
+            {!isConfirmed ? (
               <footer className="border-t border-border/70 bg-background/35 px-5 py-4 sm:px-8">
                 <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
                   <div className="order-2 flex justify-center sm:order-1 sm:justify-start">
@@ -615,8 +599,6 @@ function ReceptionRoute() {
               </footer>
             ) : null}
           </form>
-
-          <RfidScanModal open={isAwaitingEntryAuth} onAuth={handleEntryAuth} />
         </div>
       </div>
     </section>
@@ -765,10 +747,6 @@ function TraceabilityStep({
   );
 }
 
-function LockedReceptionStart() {
-  return <div className="mx-auto min-h-[390px] max-w-4xl" aria-hidden="true" />;
-}
-
 function ConfirmedStep({
   remito,
   provider,
@@ -837,7 +815,7 @@ function ConfirmedStep({
 
       <div className="mt-8 flex w-full max-w-md flex-col gap-3 sm:flex-row">
         <Button type="button" variant="secondary" className="h-10 flex-1" onClick={onFinishTurn}>
-          {isEditMode ? "Volver al panel" : "Finalizar turno"}
+          Volver al panel
         </Button>
         <Button
           type="button"

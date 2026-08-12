@@ -7,6 +7,7 @@ import {
   Factory,
   FileText,
   Layers3,
+  LogOut,
   Pencil,
   Plus,
   Search,
@@ -29,6 +30,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { RfidScanModal } from "@/components/hmi/RfidScanModal";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -86,6 +88,7 @@ function ReceptionDashboardRoute() {
   const [dateFilter, setDateFilter] = useState<DateFilterValue | null>(null);
   const [materialFilters, setMaterialFilters] = useState<string[]>([]);
   const [providerFilters, setProviderFilters] = useState<string[]>([]);
+  const [isPanelAuthenticated, setIsPanelAuthenticated] = useState(false);
   const selectedReception = receptionRows.find((row) => row.id === selectedReceptionId);
   const materialFilterOptions = useMemo(
     () => Array.from(new Set(receptionRows.flatMap((row) => row.materials))).sort(),
@@ -162,6 +165,26 @@ function ReceptionDashboardRoute() {
     );
   };
 
+  const handleLogout = () => {
+    setSelectedReceptionId(null);
+    setIsPanelAuthenticated(false);
+  };
+
+  if (!isPanelAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background">
+        <RfidScanModal
+          open
+          title="Acceso Recepción"
+          heading="Acerque su tarjeta NFC"
+          helperText="Escanee la tarjeta para acceder al panel de recepción."
+          placeholder="Código NFC..."
+          onAuth={() => setIsPanelAuthenticated(true)}
+        />
+      </div>
+    );
+  }
+
   if (currentPath !== "/recepcion" && currentPath !== "/recepcion/") {
     return <Outlet />;
   }
@@ -173,16 +196,28 @@ function ReceptionDashboardRoute() {
           <h1 className="text-[22px] font-semibold tracking-tight text-foreground">
             Dashboard Recepción
           </h1>
-          <Button
-            asChild
-            size="sm"
-            className="h-8 gap-1.5 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
-          >
-            <Link to="/recepcion/nueva">
-              <Plus className="h-3.5 w-3.5" />
-              Nueva recepción
-            </Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              asChild
+              size="sm"
+              className="h-8 gap-1.5 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
+            >
+              <Link to="/recepcion/nueva">
+                <Plus className="h-3.5 w-3.5" />
+                Nueva recepción
+              </Link>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5 border-border/70 bg-card text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Cerrar sesión
+            </Button>
+          </div>
         </div>
       </header>
 
