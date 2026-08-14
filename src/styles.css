@@ -102,8 +102,8 @@
   --popover: oklch(0.21 0.01 265);
   --popover-foreground: oklch(0.95 0.005 260);
 
-  --primary: #b7ff1f;
-  --primary-foreground: oklch(0.12 0.01 120);
+  --primary: #5e6ad2;
+  --primary-foreground: white;
 
   --secondary: oklch(0.24 0.01 265);
   --secondary-foreground: oklch(0.92 0.005 260);
@@ -123,7 +123,7 @@
 
   --border: oklch(0.28 0.01 265);
   --input: oklch(0.26 0.01 265);
-  --ring: #b7ff1f;
+  --ring: #5e6ad2;
 
   --elevated: oklch(0.215 0.01 265);
 

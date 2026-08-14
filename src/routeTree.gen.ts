@@ -17,6 +17,7 @@ import { Route as BandasRouteImport } from './routes/bandas'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TrafilaModelosRouteImport } from './routes/trafila.modelos'
 import { Route as TrafilaCategoriasRouteImport } from './routes/trafila.categorias'
+import { Route as RecepcionNuevaRouteImport } from './routes/recepcion.nueva'
 import { Route as NeumaticosModelosRouteImport } from './routes/neumaticos.modelos'
 import { Route as MaestrosMasterKeyRouteImport } from './routes/maestros.$masterKey'
 
@@ -60,6 +61,11 @@ const TrafilaCategoriasRoute = TrafilaCategoriasRouteImport.update({
   path: '/trafila/categorias',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RecepcionNuevaRoute = RecepcionNuevaRouteImport.update({
+  id: '/nueva',
+  path: '/nueva',
+  getParentRoute: () => RecepcionRoute,
+} as any)
 const NeumaticosModelosRoute = NeumaticosModelosRouteImport.update({
   id: '/neumaticos/modelos',
   path: '/neumaticos/modelos',
@@ -76,10 +82,11 @@ export interface FileRoutesByFullPath {
   '/bandas': typeof BandasRoute
   '/calidad': typeof CalidadRoute
   '/control-final': typeof ControlFinalRoute
-  '/recepcion': typeof RecepcionRoute
+  '/recepcion': typeof RecepcionRouteWithChildren
   '/vulcanizado': typeof VulcanizadoRoute
   '/maestros/$masterKey': typeof MaestrosMasterKeyRoute
   '/neumaticos/modelos': typeof NeumaticosModelosRoute
+  '/recepcion/nueva': typeof RecepcionNuevaRoute
   '/trafila/categorias': typeof TrafilaCategoriasRoute
   '/trafila/modelos': typeof TrafilaModelosRoute
 }
@@ -88,10 +95,11 @@ export interface FileRoutesByTo {
   '/bandas': typeof BandasRoute
   '/calidad': typeof CalidadRoute
   '/control-final': typeof ControlFinalRoute
-  '/recepcion': typeof RecepcionRoute
+  '/recepcion': typeof RecepcionRouteWithChildren
   '/vulcanizado': typeof VulcanizadoRoute
   '/maestros/$masterKey': typeof MaestrosMasterKeyRoute
   '/neumaticos/modelos': typeof NeumaticosModelosRoute
+  '/recepcion/nueva': typeof RecepcionNuevaRoute
   '/trafila/categorias': typeof TrafilaCategoriasRoute
   '/trafila/modelos': typeof TrafilaModelosRoute
 }
@@ -101,10 +109,11 @@ export interface FileRoutesById {
   '/bandas': typeof BandasRoute
   '/calidad': typeof CalidadRoute
   '/control-final': typeof ControlFinalRoute
-  '/recepcion': typeof RecepcionRoute
+  '/recepcion': typeof RecepcionRouteWithChildren
   '/vulcanizado': typeof VulcanizadoRoute
   '/maestros/$masterKey': typeof MaestrosMasterKeyRoute
   '/neumaticos/modelos': typeof NeumaticosModelosRoute
+  '/recepcion/nueva': typeof RecepcionNuevaRoute
   '/trafila/categorias': typeof TrafilaCategoriasRoute
   '/trafila/modelos': typeof TrafilaModelosRoute
 }
@@ -119,6 +128,7 @@ export interface FileRouteTypes {
     | '/vulcanizado'
     | '/maestros/$masterKey'
     | '/neumaticos/modelos'
+    | '/recepcion/nueva'
     | '/trafila/categorias'
     | '/trafila/modelos'
   fileRoutesByTo: FileRoutesByTo
@@ -131,6 +141,7 @@ export interface FileRouteTypes {
     | '/vulcanizado'
     | '/maestros/$masterKey'
     | '/neumaticos/modelos'
+    | '/recepcion/nueva'
     | '/trafila/categorias'
     | '/trafila/modelos'
   id:
@@ -143,6 +154,7 @@ export interface FileRouteTypes {
     | '/vulcanizado'
     | '/maestros/$masterKey'
     | '/neumaticos/modelos'
+    | '/recepcion/nueva'
     | '/trafila/categorias'
     | '/trafila/modelos'
   fileRoutesById: FileRoutesById
@@ -152,7 +164,7 @@ export interface RootRouteChildren {
   BandasRoute: typeof BandasRoute
   CalidadRoute: typeof CalidadRoute
   ControlFinalRoute: typeof ControlFinalRoute
-  RecepcionRoute: typeof RecepcionRoute
+  RecepcionRoute: typeof RecepcionRouteWithChildren
   VulcanizadoRoute: typeof VulcanizadoRoute
   MaestrosMasterKeyRoute: typeof MaestrosMasterKeyRoute
   NeumaticosModelosRoute: typeof NeumaticosModelosRoute
@@ -218,6 +230,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TrafilaCategoriasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/recepcion/nueva': {
+      id: '/recepcion/nueva'
+      path: '/nueva'
+      fullPath: '/recepcion/nueva'
+      preLoaderRoute: typeof RecepcionNuevaRouteImport
+      parentRoute: typeof RecepcionRoute
+    }
     '/neumaticos/modelos': {
       id: '/neumaticos/modelos'
       path: '/neumaticos/modelos'
@@ -235,12 +254,24 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface RecepcionRouteChildren {
+  RecepcionNuevaRoute: typeof RecepcionNuevaRoute
+}
+
+const RecepcionRouteChildren: RecepcionRouteChildren = {
+  RecepcionNuevaRoute: RecepcionNuevaRoute,
+}
+
+const RecepcionRouteWithChildren = RecepcionRoute._addFileChildren(
+  RecepcionRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BandasRoute: BandasRoute,
   CalidadRoute: CalidadRoute,
   ControlFinalRoute: ControlFinalRoute,
-  RecepcionRoute: RecepcionRoute,
+  RecepcionRoute: RecepcionRouteWithChildren,
   VulcanizadoRoute: VulcanizadoRoute,
   MaestrosMasterKeyRoute: MaestrosMasterKeyRoute,
   NeumaticosModelosRoute: NeumaticosModelosRoute,
