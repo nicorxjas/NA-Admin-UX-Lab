@@ -8,10 +8,12 @@ import {
   FileText,
   Layers3,
   LogOut,
+  Moon,
   Pencil,
   Plus,
   Search,
   SlidersHorizontal,
+  Sun,
   Trash2,
   UserRound,
   X,
@@ -61,6 +63,17 @@ type DateFilterValue =
 
 type ReceptionFilterKey = "date" | "materials" | "provider";
 
+type ThemeMode = "dark" | "light";
+
+const THEME_STORAGE_KEY = "na-carrera-recepcion-theme";
+
+function getStoredTheme() {
+  if (typeof window === "undefined") return undefined;
+
+  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return storedTheme === "light" || storedTheme === "dark" ? storedTheme : undefined;
+}
+
 const dateFilterOptions: { value: DateFilterValue; label: string }[] = [
   { value: "today", label: "Hoy" },
   { value: "yesterday", label: "Ayer" },
@@ -89,6 +102,8 @@ function ReceptionDashboardRoute() {
   const [materialFilters, setMaterialFilters] = useState<string[]>([]);
   const [providerFilters, setProviderFilters] = useState<string[]>([]);
   const [isPanelAuthenticated, setIsPanelAuthenticated] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>("dark");
+  const [isThemeReady, setIsThemeReady] = useState(false);
   const selectedReception = receptionRows.find((row) => row.id === selectedReceptionId);
   const materialFilterOptions = useMemo(
     () => Array.from(new Set(receptionRows.flatMap((row) => row.materials))).sort(),
@@ -143,6 +158,19 @@ function ReceptionDashboardRoute() {
     ? dateFilterOptions.find((option) => option.value === dateFilter)?.label
     : undefined;
 
+  useEffect(() => {
+    setTheme(getStoredTheme() ?? "dark");
+    setIsThemeReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isThemeReady) return;
+
+    const isDark = theme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [isThemeReady, theme]);
+
   const clearFilters = () => {
     setDateFilter(null);
     setMaterialFilters([]);
@@ -170,6 +198,10 @@ function ReceptionDashboardRoute() {
     setIsPanelAuthenticated(false);
   };
 
+  const toggleTheme = () => {
+    setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
+  };
+
   if (!isPanelAuthenticated) {
     return (
       <div className="min-h-screen bg-background">
@@ -192,31 +224,36 @@ function ReceptionDashboardRoute() {
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-border/70">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10">
+        <div className="mx-auto grid w-full max-w-7xl grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-4 px-6 py-6 sm:flex sm:items-center sm:justify-between sm:px-8 lg:px-10">
           <h1 className="text-[22px] font-semibold tracking-tight text-foreground">
             Dashboard Recepción
           </h1>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              asChild
-              size="sm"
-              className="h-8 gap-1.5 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
-            >
-              <Link to="/recepcion/nueva">
-                <Plus className="h-3.5 w-3.5" />
-                Nueva recepción
-              </Link>
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1.5 border-border/70 bg-card text-muted-foreground hover:bg-accent/60 hover:text-foreground"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              Cerrar sesión
-            </Button>
+          <div className="contents sm:flex sm:items-center sm:gap-2">
+            <div className="justify-self-end sm:justify-self-auto">
+              <ThemeToggle theme={theme} onToggle={toggleTheme} />
+            </div>
+            <div className="col-span-2 flex flex-wrap items-center gap-2 sm:col-span-1 sm:justify-end">
+              <Button
+                asChild
+                size="sm"
+                className="h-8 gap-1.5 bg-[#5E6AD2] text-white hover:bg-[#6875E8]"
+              >
+                <Link to="/recepcion/nueva">
+                  <Plus className="h-3.5 w-3.5" />
+                  Nueva recepción
+                </Link>
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 border-border/70 bg-card text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Cerrar sesión
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -427,6 +464,42 @@ function ReceptionDashboardRoute() {
         />
       ) : null}
     </div>
+  );
+}
+
+function ThemeToggle({ theme, onToggle }: { theme: ThemeMode; onToggle: () => void }) {
+  const isLight = theme === "light";
+
+  return (
+    <button
+      type="button"
+      aria-label={isLight ? "Cambiar a modo oscuro" : "Cambiar a modo claro"}
+      aria-pressed={theme === "dark"}
+      title={isLight ? "Modo claro" : "Modo oscuro"}
+      onClick={onToggle}
+      className="group inline-grid h-8 shrink-0 grid-cols-2 rounded-md border border-border/80 bg-background/70 p-0.5 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      <span
+        className={cn(
+          "grid h-7 w-7 place-items-center rounded-[6px] transition-all",
+          isLight
+            ? "bg-card text-foreground shadow-[0_1px_2px_rgb(15_23_42/0.08)] ring-1 ring-border/70"
+            : "text-muted-foreground/80 group-hover:text-foreground",
+        )}
+      >
+        <Sun className="h-3.5 w-3.5" strokeWidth={1.8} />
+      </span>
+      <span
+        className={cn(
+          "grid h-7 w-7 place-items-center rounded-[6px] transition-all",
+          !isLight
+            ? "bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.28)] ring-1 ring-border/70"
+            : "text-muted-foreground/80 group-hover:text-foreground",
+        )}
+      >
+        <Moon className="h-3.5 w-3.5" strokeWidth={1.8} />
+      </span>
+    </button>
   );
 }
 
@@ -743,13 +816,13 @@ function ReceptionDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full max-w-none overflow-visible border-border/80 bg-[#0e0f11] p-0 shadow-2xl [&>button:first-child]:hidden sm:w-[760px] sm:max-w-[760px]"
+        className="w-full max-w-none overflow-visible border-border/80 bg-card p-0 shadow-2xl dark:bg-[#0e0f11] [&>button:first-child]:hidden sm:w-[760px] sm:max-w-[760px]"
       >
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="absolute left-3 top-1/2 z-[60] h-9 w-9 -translate-y-1/2 rounded-full border border-border/80 bg-card text-muted-foreground shadow-lg hover:bg-accent/70 hover:text-foreground sm:-left-5"
+          className="absolute left-3 top-1/2 z-[60] h-9 w-9 -translate-y-1/2 rounded-full border border-border/80 bg-card text-muted-foreground shadow-lg hover:bg-card hover:text-foreground sm:-left-5"
           title="Minimizar"
           aria-label="Minimizar detalle"
           onClick={() => onOpenChange(false)}
@@ -760,7 +833,7 @@ function ReceptionDetailSheet({
           <SheetHeader>
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#A8B1FF]">
+                <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5E6AD2] dark:text-[#A8B1FF]">
                   <FileText className="h-3.5 w-3.5" />
                   Detalle Recepción
                 </div>
@@ -773,7 +846,7 @@ function ReceptionDetailSheet({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 shrink-0 bg-[#0e0f11] text-muted-foreground hover:bg-accent/70 hover:text-foreground"
+                  className="h-8 w-8 shrink-0 bg-card text-muted-foreground hover:bg-accent/70 hover:text-foreground dark:bg-[#0e0f11]"
                   title="Cerrar"
                   aria-label="Cerrar detalle"
                 >
@@ -796,11 +869,14 @@ function ReceptionDetailSheet({
             <PanelMetric label="Batch" value={String(reception.batch)} />
           </div>
 
-          <DetailSection icon={<Boxes className="h-4 w-4 text-[#A8B1FF]" />} title="Trazabilidad">
+          <DetailSection
+            icon={<Boxes className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />}
+            title="Trazabilidad"
+          >
             <TraceMaterialsSummary materials={reception.traceMaterials} />
           </DetailSection>
         </div>
-        <div className="absolute bottom-0 left-0 right-4 z-[65] flex justify-end gap-2 border-t border-border/80 bg-[#0e0f11]/95 px-6 py-4 backdrop-blur">
+        <div className="absolute bottom-0 left-0 right-4 z-[65] flex justify-end gap-2 border-t border-border/80 bg-card/95 px-6 py-4 backdrop-blur dark:bg-[#0e0f11]/95">
           <Button asChild type="button" variant="secondary" className="h-9 gap-2">
             <Link to="/recepcion/nueva" search={{ editId: reception.id }}>
               <Pencil className="h-4 w-4" />
@@ -861,7 +937,7 @@ function TraceMaterialsSummary({ materials }: { materials: ReceptionMaterialEntr
           >
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
               <div className="flex min-w-0 items-center gap-2">
-                <Boxes className="h-3.5 w-3.5 shrink-0 text-[#A8B1FF]" />
+                <Boxes className="h-3.5 w-3.5 shrink-0 text-[#5E6AD2] dark:text-[#A8B1FF]" />
                 <span className="text-[15px] font-semibold text-foreground">
                   Recepción Material {material.materialCode}
                 </span>
@@ -909,7 +985,7 @@ function LotsTraceabilitySummary({ lots }: { lots: ReceptionTraceLot[] }) {
         >
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <div className="flex min-w-0 items-center gap-2">
-              <FileText className="h-3.5 w-3.5 shrink-0 text-[#A8B1FF]" />
+              <FileText className="h-3.5 w-3.5 shrink-0 text-[#5E6AD2] dark:text-[#A8B1FF]" />
               <span className="font-mono text-[15px] font-semibold text-foreground">
                 Lote {lot.code}
               </span>
@@ -924,7 +1000,7 @@ function LotsTraceabilitySummary({ lots }: { lots: ReceptionTraceLot[] }) {
             {lot.palets.map((pallet) => (
               <div key={pallet.code}>
                 <div className="flex flex-wrap items-center gap-2">
-                  <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
+                  <Layers3 className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
                   <span className="font-mono text-[13px] font-semibold text-foreground">
                     Pallet {pallet.code}
                   </span>
@@ -956,7 +1032,7 @@ function RollsTraceabilitySummary({ rolls }: { rolls: string[] }) {
   return (
     <div className="mt-4">
       <div className="flex items-center gap-2">
-        <Layers3 className="h-4 w-4 text-[#A8B1FF]" />
+        <Layers3 className="h-4 w-4 text-[#5E6AD2] dark:text-[#A8B1FF]" />
         <span className="font-mono text-[13.5px] font-semibold text-foreground">Rollos</span>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1018,7 +1094,9 @@ function PanelMetric({ label, value }: { label: string; value: string }) {
       <div className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
         {label}
       </div>
-      <div className="mt-1 font-mono text-[17px] font-semibold text-[#A8B1FF]">{value}</div>
+      <div className="mt-1 font-mono text-[17px] font-semibold text-[#5E6AD2] dark:text-[#A8B1FF]">
+        {value}
+      </div>
     </div>
   );
 }
