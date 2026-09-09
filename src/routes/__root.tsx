@@ -17,7 +17,7 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { MasterDataProvider } from "@/lib/master-store";
 import { ReceptionDataProvider } from "@/lib/reception-store";
 
-const demoPaths = ["/recepcion", "/calidad", "/control-final"] as const;
+const demoPaths = ["/recepcion", "/calidad", "/control-final", "/vulcanizado"] as const;
 const fallbackDemoPath = "/recepcion";
 
 function isDemoPath(pathname: string) {

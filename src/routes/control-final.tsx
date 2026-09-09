@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { readCycles } from "@/lib/vulcanization";
 
 export const Route = createFileRoute("/control-final")({
   component: FinalControlRoute,
@@ -177,7 +178,16 @@ function FinalControlRoute() {
     const nextQuery = normalizeScanCode(value ?? scanQuery);
     if (!nextQuery) return;
 
-    const foundTire = findTireByCode(nextQuery);
+    let foundTire: FinalControlTire | undefined;
+    try {
+      foundTire = findTireByCode(nextQuery);
+    } catch {
+      setLastScanAttempt(
+        "No se pudieron leer los ciclos de vulcanizado guardados. Recargá la página.",
+      );
+      setCurrentTire(undefined);
+      return;
+    }
     setScanQuery(nextQuery);
     setLastScanAttempt(nextQuery);
     setCurrentTire(foundTire);
@@ -898,6 +908,16 @@ function StatusBadge({
 
 function findTireByCode(code: string) {
   const normalizedCode = normalizeScanCode(code);
+  const cycle = readCycles().find((record) => record.tireCode === normalizedCode);
+  if (cycle) {
+    return {
+      id: cycle.id,
+      code: cycle.tireCode,
+      number: cycle.tireCode.split("-").at(-1)!,
+      model: cycle.model,
+      vulcanizedAt: cycle.createdAt,
+    };
+  }
   return finalControlTires.find((tire) => normalizeScanCode(tire.code) === normalizedCode);
 }
 
@@ -937,12 +957,9 @@ function getShiftTotals(records: ShiftRecord[]) {
 }
 
 function formatDateTime(value: string) {
-  const [datePart, timePart = ""] = value.split("T");
-  const [year, month, day] = datePart.split("-");
-  const [hour = "", minute = ""] = timePart.split(":");
-  if (!year || !month || !day || !hour || !minute) return value;
-
-  return `${day}/${month}/${year} ${hour}:${minute}`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
 }
 
 function formatClockTime(value: string) {

@@ -1,3 +1,4 @@
+import { StepItem } from "@/components/hmi/StepItem";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   Boxes,
@@ -2594,55 +2595,6 @@ function MaterialMeta({ label, value, mono }: { label: string; value: string; mo
         {value}
       </div>
     </div>
-  );
-}
-
-function StepItem({
-  step,
-  activeStep,
-  showLine,
-}: {
-  step: (typeof steps)[number];
-  activeStep: number;
-  showLine: boolean;
-}) {
-  const Icon = step.icon;
-  const isComplete = step.number < activeStep;
-  const isCurrent = step.number === activeStep;
-
-  return (
-    <li className="flex min-w-[176px] flex-1 items-center">
-      {step.number > 1 ? <span className="mr-4 h-px min-w-8 flex-1 bg-border/80" /> : null}
-      <div className="flex min-w-0 shrink-0 items-center gap-3">
-        <span
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-[13px] font-semibold",
-            isCurrent
-              ? "border-[#5E6AD2] bg-[#5E6AD2] text-white shadow-[0_0_0_4px_rgba(94,106,210,0.16)]"
-              : isComplete
-                ? "border-[#5E6AD2]/60 bg-[#5E6AD2]/15 text-[#A8B1FF]"
-                : "border-border bg-background/55 text-muted-foreground",
-          )}
-        >
-          {isComplete ? <Check className="h-4 w-4" /> : step.number}
-        </span>
-        <div className="min-w-0">
-          <div
-            className={cn(
-              "flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.1em]",
-              isCurrent || isComplete ? "text-[#A8B1FF]" : "text-muted-foreground",
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {step.label}
-          </div>
-          <div className="mt-0.5 truncate text-[13.5px] font-medium text-foreground">
-            {step.title}
-          </div>
-        </div>
-      </div>
-      {showLine && <span className="ml-4 h-px min-w-8 flex-1 bg-border/80" />}
-    </li>
   );
 }
 

@@ -460,3 +460,232 @@
     width: 0;
   }
 }
+
+/* Vulcanizado: quiet surfaces and clear tactile states, shared HMI palette. */
+.vulcanization {
+  --vulc-surface: color-mix(in oklch, var(--background) 45%, var(--card));
+}
+.vulcanization button {
+  touch-action: manipulation;
+}
+.vulcanization button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+.vulc-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  transition: background 160ms;
+}
+.vulc-step:enabled:hover {
+  background: var(--accent);
+}
+.vulc-step-number {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font: 500 11px var(--font-mono);
+  color: var(--muted-foreground);
+}
+.vulc-step-number.is-active {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+.vulc-steps [aria-current="step"] .vulc-step {
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+}
+.dark .vulc-step-number.is-active {
+  color: #a8b1ff;
+}
+.vulc-workspace {
+  display: grid;
+}
+.vulc-stage {
+  animation: vulc-enter 220ms ease-out;
+}
+.vulc-context {
+  padding: 32px 26px;
+  background: var(--vulc-surface);
+  border-left: 1px solid var(--border);
+}
+.vulc-context-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--success);
+}
+.vulc-context-list {
+  margin-top: 26px;
+  font-size: 12px;
+}
+.vulc-context-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+.vulc-context-list dt {
+  color: var(--muted-foreground);
+}
+.vulc-context-list dd {
+  text-align: right;
+  font-weight: 500;
+}
+.vulc-scan-intro {
+  padding-top: 12px;
+}
+.vulc-scan-symbol {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+.vulc-scan-symbol::after {
+  content: "";
+  position: absolute;
+  inset: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  border-radius: 16px;
+}
+.vulc-scan-form {
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--vulc-surface);
+}
+.vulc-press {
+  background: var(--vulc-surface);
+  transition:
+    border-color 160ms,
+    background 160ms,
+    box-shadow 160ms;
+}
+.vulc-press:enabled:hover {
+  box-shadow: 0 3px 12px rgb(0 0 0 / 5%);
+}
+.vulc-press[aria-pressed="true"],
+.vulc-cavity[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+}
+.vulc-press:disabled {
+  background: var(--card);
+  color: var(--muted-foreground);
+  border-style: dashed;
+}
+.vulc-press:disabled p {
+  opacity: 0.8;
+}
+.vulc-radio {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+}
+.vulc-preference {
+  color: var(--muted-foreground);
+}
+.vulc-preference input {
+  width: 16px;
+  height: 16px;
+}
+.vulc-cavity {
+  padding: 16px 12px;
+  background: var(--vulc-surface);
+  transition:
+    border-color 160ms,
+    background 160ms;
+}
+.vulc-cavity:enabled:hover {
+  border-color: var(--primary);
+}
+.vulc-cavity:disabled {
+  border-style: dashed;
+  color: var(--muted-foreground);
+  background: var(--card);
+}
+.vulc-cavity-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+}
+.vulc-cavity-mark.is-selected {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+}
+.vulc-cavity-mark.is-occupied {
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  background: color-mix(in srgb, var(--warning) 6%, transparent);
+}
+.vulc-actions {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+@keyframes vulc-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (min-width: 1100px) {
+  .vulc-workspace.has-context {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+}
+@media (max-width: 1099px) {
+  .vulc-context {
+    display: none;
+  }
+}
+@media (max-width: 639px) {
+  .vulc-step {
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 2px;
+  }
+  .vulc-step > span {
+    text-align: center;
+  }
+  .vulc-step-number {
+    width: 26px;
+    height: 26px;
+  }
+  .vulc-scan-form {
+    padding: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vulc-stage {
+    animation: none;
+  }
+  .vulcanization *,
+  .vulcanization *::after {
+    transition-duration: 0s !important;
+  }
+}
