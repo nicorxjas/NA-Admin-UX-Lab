@@ -1,11 +1,12 @@
 import { StepItem } from "@/components/hmi/StepItem";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
   LockKeyhole,
+  LogOut,
   Clock,
   Flame,
   History,
@@ -16,7 +17,7 @@ import {
   UserRound,
   XCircle,
 } from "lucide-react";
-import { CartridgeScanModal } from "@/components/hmi/CartridgeScanModal";
+import { CartridgeReader } from "@/components/hmi/CartridgeReader";
 import { RfidScanModal } from "@/components/hmi/RfidScanModal";
 import { Button } from "@/components/ui/button";
 import {
@@ -67,7 +68,7 @@ function VulcanizationRoute() {
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [clock, setClock] = useState(Date.now());
-  const [scanOpen, setScanOpen] = useState(true);
+  const [readerKey, setReaderKey] = useState(0);
 
   useEffect(() => {
     setCartridges(demoCartridges());
@@ -123,6 +124,10 @@ function VulcanizationRoute() {
 
   function scan(value: string) {
     const code = value.trim().toUpperCase();
+    setCartridge(undefined);
+    setPress("");
+    setCavity(undefined);
+    setError("");
     const found = cartridges.find((c) => c.code === code);
     if (!found)
       return {
@@ -136,9 +141,6 @@ function VulcanizationRoute() {
       };
     setClock(Date.now());
     setCartridge(found);
-    setCavity(undefined);
-    setError("");
-    setScanOpen(false);
     return null;
   }
 
@@ -185,13 +187,19 @@ function VulcanizationRoute() {
   }
 
   function nextCycle() {
+    setReaderKey((key) => key + 1);
     setCompleted(undefined);
-    setScanOpen(true);
     setPress("");
     setCartridge(undefined);
     setCavity(undefined);
     setStep(0);
     setError("");
+  }
+
+  function closeTurn() {
+    nextCycle();
+    setOperator("");
+    setHistoryOpen(false);
   }
 
   return (
@@ -243,10 +251,12 @@ function VulcanizationRoute() {
               Demostración · datos locales
             </span>
             {operator && (
-              <Button variant="ghost" className="sm:ml-auto" onClick={() => setHistoryOpen(true)}>
-                <History className="h-4 w-4" />
-                Ciclos registrados <span className="font-mono">{cycles.length}</span>
-              </Button>
+              <div className="flex flex-wrap items-center gap-3 sm:ml-auto">
+                <Button variant="ghost" onClick={() => setHistoryOpen(true)}>
+                  <History className="h-4 w-4" />
+                  Ciclos registrados <span className="font-mono">{cycles.length}</span>
+                </Button>
+              </div>
             )}
           </div>
         </header>
@@ -269,9 +279,6 @@ function VulcanizationRoute() {
               <CheckCircle2 className="h-12 w-12" />
             </div>
             <h2 className="text-2xl font-semibold">Vulcanizado registrado</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              El ciclo se guardó correctamente. El neumático conserva su ID original.
-            </p>
             <div className="my-7 w-full rounded-lg border border-border/80 bg-background/35 p-6 text-left">
               <div className="text-xs text-muted-foreground">ID del neumático · sin cambios</div>
               <div className="mt-1 font-mono text-2xl font-semibold">{completed.tireCode}</div>
@@ -288,12 +295,6 @@ function VulcanizationRoute() {
               Escanear siguiente cartucho
               <ArrowRight />
             </Button>
-            <Link
-              to="/control-final"
-              className={cn("mt-6 text-sm underline underline-offset-4", accent)}
-            >
-              Ir a Control Final
-            </Link>
           </div>
         ) : (
           <>
@@ -332,15 +333,13 @@ function VulcanizationRoute() {
                 )}
                 {step === 0 && (
                   <div className="mx-auto w-full max-w-2xl">
-                    {!cartridge && (
-                      <div className="flex min-h-80 flex-col items-center justify-center gap-4 text-center">
-                        <ScanLine className={cn("h-10 w-10", accent)} />
-                        <h2 className="text-xl font-semibold">Escaneá el cartucho</h2>
-                        <Button className={primary} onClick={() => setScanOpen(true)}>
-                          Abrir lector
-                        </Button>
-                      </div>
-                    )}
+                    <div className={cn(cartridge && "mb-7")}>
+                      <CartridgeReader
+                        key={readerKey}
+                        onScan={scan}
+                        samples={cartridges.map((c) => c.code)}
+                      />
+                    </div>
                     {cartridge && (
                       <>
                         <StepHeading
@@ -672,19 +671,30 @@ function VulcanizationRoute() {
                 </aside>
               )}
             </div>
-            <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 px-5 py-3 text-[11px] text-muted-foreground sm:px-8">
-              <span>NA Carrera · Trazabilidad de producción</span>
-              <span>Estación Vulcanizado · Paso {step + 1} de 3</span>
-            </footer>
           </>
         )}
+        {operator && (
+          <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border/70 px-5 py-3 text-[11px] text-muted-foreground sm:px-8">
+            <span>NA Carrera · Trazabilidad de producción</span>
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-4">
+              <span>
+                Estación Vulcanizado{!completed && ` · Paso ${step + 1} de 3`}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 border-border/70 bg-card text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                onClick={closeTurn}
+                disabled={saving}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Finalizar turno
+              </Button>
+            </div>
+          </footer>
+        )}
       </div>
-      <CartridgeScanModal
-        open={ready && !!operator && step === 0 && !cartridge && scanOpen && !storageError}
-        onClose={() => setScanOpen(false)}
-        onScan={scan}
-        samples={cartridges.map((c) => c.code)}
-      />
       <RfidScanModal
         open={ready && !operator && !storageError}
         onAuth={setOperator}

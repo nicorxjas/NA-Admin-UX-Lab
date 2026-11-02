@@ -5,6 +5,7 @@ import {
   Clock,
   FileSearch,
   History,
+  LogOut,
   Moon,
   Search,
   ShieldCheck,
@@ -368,6 +369,25 @@ function FinalControlRoute() {
               )}
             </div>
           </form>
+
+          {authorizedOperator && (
+            <footer className="flex justify-end border-t border-border/70 px-5 py-3 sm:px-8">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1.5 border-border/70 bg-card text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                onClick={() => {
+                  prepareNextScan();
+                  setIsRejectDialogOpen(false);
+                  setAuthorizedOperator(undefined);
+                }}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Finalizar turno
+              </Button>
+            </footer>
+          )}
 
           <RfidScanModal
             open={isAwaitingFinalAuth}
