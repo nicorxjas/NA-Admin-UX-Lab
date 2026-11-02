@@ -39,11 +39,25 @@ test("rejects incompatible presses", () => {
 });
 
 test("rejects previously consumed cartridges and occupied cavities", () => {
-  const cycle = { cartridgeCode: valid.code, press: "B1", cavity: "Izquierda" };
-  assert.match(validateCycle(valid, "B1", "Derecha", [cycle]), /cartucho/);
-  assert.match(validateCycle(cartridges[3], "B1", "Izquierda", [cycle]), /cavidad/);
+  const cycle = { cartridgeCode: cartridges[3].code, press: "B1", cavity: "Izquierda" };
+  assert.match(validateCycle(cartridges[3], "B1", "Derecha", [cycle]), /cartucho/);
+  assert.match(validateCycle(valid, "B1", "Izquierda", [cycle]), /cavidad/);
   assert.equal(cavityOccupied("B2", "Derecha", []), true);
   assert.equal(cavityOccupied("B2", "Izquierda", []), false);
+});
+
+test("keeps CAR-001 reusable in the same cavity across demo cycles", () => {
+  const cycles = Array.from({ length: 5 }, () => ({
+    cartridgeCode: "CAR-001",
+    press: "B1",
+    cavity: "Izquierda",
+  }));
+  assert.ok(cartridgeChecks(valid, cycles, now).every((check) => check.ok));
+  assert.equal(validateCycle(valid, "B1", "Izquierda", cycles), null);
+  assert.equal(cavityOccupied("B1", "Izquierda", cycles), false);
+  assert.equal(validateCycle(cartridges[3], "B1", "Izquierda", cycles), null);
+  assert.match(validateCycle(valid, "B3", "Izquierda", cycles), /prensa/);
+  assert.match(validateCycle(valid, "B2", "Derecha", cycles), /cavidad/);
 });
 
 test("preserves the cartridge ID and normalizes legacy generated tire IDs", () => {

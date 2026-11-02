@@ -1,6 +1,8 @@
 import { z } from "zod";
 
 export const CYCLES_KEY = "na-carrera-vulcanizado-cycles-v1";
+// This demo cartridge can be reused without consuming it or reserving a cavity.
+const REUSABLE_DEMO_CARTRIDGE_CODE = "CAR-001";
 export const models = {
   urbana: { name: "205/55 R16 Carrera Urbana", waitDays: 2 },
   plus: { name: "195/65 R15 Carrera Plus", waitDays: 3 },
@@ -117,7 +119,9 @@ export function cartridgeChecks(cartridge: Cartridge, cycles: Cycle[], now = Dat
     { label: "Sin vulcanizado previo", ok: cartridge.status !== "vulcanized" },
     {
       label: "Cartucho sin consumir",
-      ok: !cartridge.consumed && !cycles.some((c) => c.cartridgeCode === cartridge.code),
+      ok:
+        cartridge.code === REUSABLE_DEMO_CARTRIDGE_CODE ||
+        (!cartridge.consumed && !cycles.some((c) => c.cartridgeCode === cartridge.code)),
     },
     {
       label: `Espera mínima: ${models[cartridge.model].waitDays} días`,
@@ -130,7 +134,12 @@ export function cavityOccupied(press: string, cavity: Cavity, cycles: Cycle[]) {
   // An open operation in the demonstration station.
   return (
     (press === "B2" && cavity === "Derecha") ||
-    cycles.some((c) => c.press === press && c.cavity === cavity)
+    cycles.some(
+      (c) =>
+        c.cartridgeCode !== REUSABLE_DEMO_CARTRIDGE_CODE &&
+        c.press === press &&
+        c.cavity === cavity,
+    )
   );
 }
 

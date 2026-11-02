@@ -333,14 +333,13 @@ function VulcanizationRoute() {
                 )}
                 {step === 0 && (
                   <div className="mx-auto w-full max-w-2xl">
-                    <div className={cn(cartridge && "mb-7")}>
+                    {!cartridge ? (
                       <CartridgeReader
                         key={readerKey}
                         onScan={scan}
                         samples={cartridges.map((c) => c.code)}
                       />
-                    </div>
-                    {cartridge && (
+                    ) : (
                       <>
                         <StepHeading
                           title="Revisá el cartucho"
